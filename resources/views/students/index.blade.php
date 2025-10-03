@@ -53,7 +53,23 @@
         <div class="card-body">
             <div class="row mb-3">
                 <div class="col-md-6">
-                    <input type="text" class="form-control" placeholder="Search by name, email, or college..." id="studentSearch" onkeyup="filterStudents()">
+                    <form method="GET" action="{{ route('students.index') }}" class="d-flex">
+                        <input type="text" name="q" class="form-control me-2" placeholder="Search by name, email, contact, address, or college..." value="{{ old('q', $q ?? request('q')) }}">
+                        <input type="hidden" name="per_page" value="{{ $perPage ?? request('per_page', 3) }}">
+                        <button class="btn btn-outline-secondary" type="submit">Search</button>
+                    </form>
+                </div>
+                <div class="col-md-6 text-end">
+                    <form method="GET" action="{{ route('students.index') }}" class="d-inline">
+                        {{-- preserve q when changing per-page --}}
+                        <input type="hidden" name="q" value="{{ $q ?? request('q') }}">
+                        <label for="perPage" class="me-2">Per page</label>
+                        <select id="perPage" name="per_page" class="form-select d-inline-block" style="width: auto;" onchange="this.form.submit()">
+                            @foreach([3,10,25,50] as $opt)
+                                <option value="{{ $opt }}" {{ (int)($perPage ?? request('per_page', 3)) === $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                            @endforeach
+                        </select>
+                    </form>
                 </div>
             </div>
             <div class="table-responsive">
@@ -124,22 +140,6 @@
 </style>
 
 <script>
-function filterStudents() {
-    let input = document.getElementById('studentSearch');
-    let filter = input.value.toLowerCase();
-    let table = document.getElementById('studentsTable');
-    let trs = table.getElementsByTagName('tr');
-    for (let i = 1; i < trs.length; i++) {
-        let tds = trs[i].getElementsByTagName('td');
-        let show = false;
-        for (let j = 0; j < tds.length; j++) {
-            if (tds[j].innerText.toLowerCase().indexOf(filter) > -1) {
-                show = true;
-                break;
-            }
-        }
-        trs[i].style.display = show ? '' : 'none';
-    }
-}
+</script>
 </script>
 @endsection

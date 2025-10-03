@@ -5,14 +5,39 @@ namespace App\Http\Controllers;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use App\Events\StudentCreated;
+use Illuminate\Support\Facades\Cache;
 class StudentController extends Controller
 {
   
-     public function index()
+     public function index(Request $request)
     {
-        // paginate students (10 per page) and order by newest first
-        $students = Student::orderBy('created_at', 'desc')->paginate(3);
-        return view('students.index', compact('students'));
+        // sanitize and normalize inputs
+        $q = (string) $request->query('q', '');
+        $q = trim($q);
+
+        // per-page control: allow a small set of options to avoid abuse
+        $allowed = [5, 10, 25, 50];
+        $perPage = (int) $request->query('per_page', 3);
+        if (! in_array($perPage, $allowed, true)) {
+            $perPage = 5;
+        }
+
+        // Build base query using the new scope name to avoid package conflicts
+        $query = Student::searchText($q)->orderBy('created_at', 'desc');
+
+        // simple caching for production when searching/filtering to reduce DB pressure
+        if (app()->environment('production')) {
+            $cacheKey = 'students:' . md5(serialize([ 'q' => $q, 'page' => $request->query('page', 1), 'per' => $perPage ]));
+            $students = Cache::remember($cacheKey, now()->addMinutes(2), function () use ($query, $perPage) {
+                return $query->paginate($perPage);
+            });
+        } else {
+            $students = $query->paginate($perPage);
+        }
+
+        $students->appends(['q' => $q, 'per_page' => $perPage]);
+
+        return view('students.index', compact('students', 'q', 'perPage'));
     }
 
     public function create()
