@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-
+use MongoDB\Laravel\Eloquent\Model;
 class Student extends Model
 {
-    use HasFactory;
+    protected $connection = 'mongodb';  // tell Laravel to use MongoDB
+    protected $collection = 'students'; // optional, defaults to plural of class name
 
     protected $fillable = [
         'name',
