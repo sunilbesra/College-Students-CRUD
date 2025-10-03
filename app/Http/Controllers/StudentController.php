@@ -10,7 +10,8 @@ class StudentController extends Controller
   
      public function index()
     {
-        $students = Student::all();
+        // paginate students (10 per page) and order by newest first
+        $students = Student::orderBy('created_at', 'desc')->paginate(3);
         return view('students.index', compact('students'));
     }
 

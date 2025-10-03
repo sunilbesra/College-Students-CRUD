@@ -72,7 +72,8 @@
                     <tbody>
                         @foreach($students as $key => $student)
                         <tr>
-                            <td>{{ $key+1 }}</td>
+                            {{-- Calculate number across pages --}}
+                            <td>{{ ($students->currentPage() - 1) * $students->perPage() + $key + 1 }}</td>
                             <td>
                                 @if($student->profile_image)
                                     <img src="/{{ $student->profile_image }}" class="rounded-circle border border-2" width="48" height="48" style="object-fit:cover;">
@@ -97,6 +98,10 @@
                         @endforeach
                     </tbody>
                 </table>
+                {{-- Pagination links --}}
+                <div class="d-flex justify-content-end mt-3">
+                    {{ $students->withQueryString()->links() }}
+                </div>
             </div>
         </div>
     </div>
