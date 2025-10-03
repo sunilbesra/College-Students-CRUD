@@ -2,16 +2,53 @@
 
 @section('content')
 <div class="container py-4">
+
+    <!-- Header with Title and Notification -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="fw-bold">Student Directory</h1>
-        <a href="{{ route('students.create') }}" class="btn btn-gradient-primary shadow">➕ Add Student</a>
+
+        <div class="d-flex align-items-center">
+            <!-- Notification Bell -->
+            <div class="dropdown me-3">
+                <button class="btn btn-light position-relative" id="notificationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-bell-fill fs-4"></i>
+                    @if(session('success'))
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            1
+                        </span>
+                    @endif
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="notificationDropdown" style="width: 280px;">
+                    <li class="dropdown-header fw-bold">Notifications</li>
+                    @if(session('success'))
+                        <li>
+                            <div class="dropdown-item d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                <div>
+                                    <div class="fw-semibold">Student Created</div>
+                                    <small class="text-muted">{{ session('success') }}</small>
+                                </div>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                    @endif
+                    <li class="text-center text-muted small">No more notifications</li>
+                </ul>
+            </div>
+
+            <a href="{{ route('students.create') }}" class="btn btn-gradient-primary shadow">➕ Add Student</a>
+        </div>
     </div>
+
+    <!-- Flash message (for inline alert if needed) -->
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             {{ session('success') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     @endif
+
+    <!-- Student Table -->
     <div class="card shadow mb-4">
         <div class="card-body">
             <div class="row mb-3">
@@ -67,6 +104,7 @@
 
 <!-- Bootstrap Icons CDN -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
 <style>
     .btn-gradient-primary {
         background: linear-gradient(90deg, #4f8cff 0%, #6f4fff 100%);
@@ -79,6 +117,7 @@
         color: #fff;
     }
 </style>
+
 <script>
 function filterStudents() {
     let input = document.getElementById('studentSearch');
