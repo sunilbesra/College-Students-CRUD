@@ -70,9 +70,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($students as $student)
+                        @foreach($students as $key => $student)
                         <tr>
-                            <td>{{ $student->id }}</td>
+                            <td>{{ $key+1 }}</td>
                             <td>
                                 @if($student->profile_image)
                                     <img src="/{{ $student->profile_image }}" class="rounded-circle border border-2" width="48" height="48" style="object-fit:cover;">
