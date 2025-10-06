@@ -65,7 +65,7 @@
                         <input type="hidden" name="q" value="{{ $q ?? request('q') }}">
                         <label for="perPage" class="me-2">Per page</label>
                         <select id="perPage" name="per_page" class="form-select d-inline-block" style="width: auto;" onchange="this.form.submit()">
-                            @foreach([3,10,25,50] as $opt)
+                            @foreach([5,10,25,50] as $opt)
                                 <option value="{{ $opt }}" {{ (int)($perPage ?? request('per_page', 3)) === $opt ? 'selected' : '' }}>{{ $opt }}</option>
                             @endforeach
                         </select>

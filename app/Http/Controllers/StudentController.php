@@ -52,7 +52,12 @@ public function store(Request $request)
         'contact' => 'required',
         'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         'address' => 'required',
-        'college' => 'required',
+            'college' => 'required',
+            'gender' => 'nullable|in:male,female,other',
+            'dob' => 'nullable|date',
+            'enrollment_status' => 'nullable|in:full_time,part_time',
+            'course' => 'nullable|string|max:255',
+            'agreed_to_terms' => 'nullable|accepted',
     ]);
 
     if ($request->hasFile('profile_image')) {
@@ -90,6 +95,11 @@ public function store(Request $request)
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'address' => 'required',
             'college' => 'required',
+            'gender' => 'nullable|in:male,female,other',
+            'dob' => 'nullable|date',
+            'enrollment_status' => 'nullable|in:full_time,part_time',
+            'course' => 'nullable|string|max:255',
+            'agreed_to_terms' => 'nullable|accepted',
         ]);
 
         if ($request->hasFile('profile_image')) {

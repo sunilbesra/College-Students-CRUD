@@ -19,6 +19,13 @@ return new class extends Migration
             $table->string('profile_image')->nullable();
             $table->string('address');
             $table->string('college');
+            // New fields added for student profile
+            $table->string('gender')->nullable();
+            $table->date('dob')->nullable();
+            $table->string('enrollment_status')->default('full_time');
+            $table->string('course')->nullable();
+            $table->boolean('agreed_to_terms')->default(false);
+
             $table->timestamps();
         });
     }

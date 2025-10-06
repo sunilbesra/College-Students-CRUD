@@ -1,0 +1,22 @@
+
+/* Custom form-control tweaks */
+.form-check-input {
+	width: 1.15em;
+	height: 1.15em;
+	margin-top: 0;
+	vertical-align: middle;
+	transform: scale(1.02);
+	/* Use modern accent-color for checked state (works in modern browsers) */
+	accent-color: #343a40;
+}
+
+/* Fallback: ensure border uses dark color when checked */
+.form-check-input:checked {
+	border-color: #343a40;
+}
+
+/* Slight spacing tweak for labels next to controls */
+.form-check-label {
+	margin-bottom: 0;
+}
+

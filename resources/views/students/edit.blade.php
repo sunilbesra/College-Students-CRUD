@@ -48,6 +48,54 @@
                                     <div class="text-danger small">{{ $message }}</div>
                                 @enderror
                             </div>
+                            <div class="col-md-4">
+                                <label for="gender" class="form-label">Gender</label>
+                                <select name="gender" id="gender" class="form-select">
+                                    <option value="">Select</option>
+                                    <option value="male" {{ old('gender', $student->gender)=='male' ? 'selected' : '' }}>Male</option>
+                                    <option value="female" {{ old('gender', $student->gender)=='female' ? 'selected' : '' }}>Female</option>
+                                    <option value="other" {{ old('gender', $student->gender)=='other' ? 'selected' : '' }}>Other</option>
+                                </select>
+                                @error('gender') <div class="text-danger small">{{ $message }}</div> @enderror
+                            </div>
+                            <div class="col-md-4">
+                                <label for="dob" class="form-label">Date of Birth</label>
+                                <input type="date" name="dob" id="dob" class="form-control" value="{{ old('dob', optional($student->dob)->format('Y-m-d') ?? $student->dob) }}">
+                                @error('dob') <div class="text-danger small">{{ $message }}</div> @enderror
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Enrollment Status</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <div class="form-check d-flex align-items-center">
+                                        <input class="form-check-input" type="radio" name="enrollment_status" id="enrollment_full" value="full_time" {{ old('enrollment_status', $student->enrollment_status)=='full_time' ? 'checked' : '' }}>
+                                        <label class="form-check-label mb-0 ms-2" for="enrollment_full">Full-time</label>
+                                    </div>
+                                    <div class="form-check d-flex align-items-center">
+                                        <input class="form-check-input" type="radio" name="enrollment_status" id="enrollment_part" value="part_time" {{ old('enrollment_status', $student->enrollment_status)=='part_time' ? 'checked' : '' }}>
+                                        <label class="form-check-label mb-0 ms-2" for="enrollment_part">Part-time</label>
+                                    </div>
+                                </div>
+                                @error('enrollment_status') <div class="text-danger small">{{ $message }}</div> @enderror
+                            </div>
+                            <div class="col-md-8 mt-2">
+                                <label for="course" class="form-label">Course</label>
+                                <select name="course" id="course" class="form-select">
+                                    <option value="">Select Course</option>
+                                    <option value="bsc" {{ old('course', $student->course)=='bsc' ? 'selected' : '' }}>B.Sc</option>
+                                    <option value="ba" {{ old('course', $student->course)=='ba' ? 'selected' : '' }}>B.A</option>
+                                    <option value="bcom" {{ old('course', $student->course)=='bcom' ? 'selected' : '' }}>B.Com</option>
+                                    <option value="mca" {{ old('course', $student->course)=='mca' ? 'selected' : '' }}>MCA</option>
+                                    <option value="msc" {{ old('course', $student->course)=='msc' ? 'selected' : '' }}>M.Sc</option>
+                                </select>
+                                @error('course') <div class="text-danger small">{{ $message }}</div> @enderror
+                            </div>
+                            <div class="col-md-4 mt-4">
+                                <div class="form-check d-flex align-items-center">
+                                    <input class="form-check-input" type="checkbox" name="agreed_to_terms" id="agreed_to_terms" value="1" {{ old('agreed_to_terms', $student->agreed_to_terms) ? 'checked' : '' }}>
+                                    <label class="form-check-label mb-0 ms-2" for="agreed_to_terms">Agree to terms</label>
+                                </div>
+                                @error('agreed_to_terms') <div class="text-danger small">{{ $message }}</div> @enderror
+                            </div>
                             <div class="col-md-12">
                                 <label for="profile_image" class="form-label">Profile Image</label>
                                 <div class="mb-2">

@@ -21,6 +21,9 @@ class EventServiceProvider extends ServiceProvider
         \App\Events\StudentCreated::class => [
             \App\Listeners\SendStudentNotificationListener::class,
         ],
+        \App\Events\CsvBatchQueued::class => [
+            \App\Listeners\DispatchCsvJobsListener::class,
+        ],
     ];
 
     /**

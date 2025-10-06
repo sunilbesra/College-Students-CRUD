@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blog App</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ asset('resources/css/app.css') }}" rel="stylesheet">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
@@ -21,5 +22,52 @@
         @yield('content')
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- CSV upload notification toast -->
+    <div aria-live="polite" aria-atomic="true" class="position-relative">
+        <div id="csvToast" class="toast position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto">CSV Upload</strong>
+                <small class="text-muted" id="csvToastTime"></small>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="csvToastBody">New CSV batch uploaded.</div>
+        </div>
+    </div>
+
+    <script>
+        // Polling approach: fetch last CSV batch cached by the listener
+        (function () {
+            let lastSeen = null;
+            const toastEl = document.getElementById('csvToast');
+            const toastBody = document.getElementById('csvToastBody');
+            const toastTime = document.getElementById('csvToastTime');
+            const toast = new bootstrap.Toast(toastEl);
+
+            async function checkLastBatch() {
+                try {
+                    const res = await fetch('/csv/last-batch');
+                    if (!res.ok) return;
+                    const json = await res.json();
+                    const batch = json.data;
+                    if (!batch) return;
+
+                    if (lastSeen !== batch.timestamp) {
+                        lastSeen = batch.timestamp;
+                        toastBody.textContent = `File: ${batch.fileName} — ${batch.count} rows queued`;
+                        toastTime.textContent = batch.timestamp;
+                        toast.show();
+                    }
+                } catch (err) {
+                    // silent fail — polling shouldn't break the app
+                    console.debug('csv poll error', err);
+                }
+            }
+
+            // start polling every 5 seconds
+            setInterval(checkLastBatch, 5000);
+            // check once on load
+            checkLastBatch();
+        })();
+    </script>
 </body>
 </html>

@@ -16,6 +16,11 @@ class Student extends Model
         'profile_image',
         'address',
         'college',
+        'gender',
+        'dob',
+        'enrollment_status',
+        'course',
+        'agreed_to_terms',
     ];
 
    
