@@ -49,14 +49,31 @@ class ProcessCsvRow implements ShouldQueue
                 'name' => $row['name'] ?? null,
                 'email' => $row['email'] ?? null,
                 'contact' => $row['contact'] ?? null,
-                'profile_image' => $row['profile_image'] ?? null,
+                'profile_image' => isset($row['profile_image']) ? (string) $row['profile_image'] : null,
                 'address' => $row['address'] ?? null,
                 'college' => $row['college'] ?? null,
+                'gender' => $row['gender'] ?? null,
+                'dob' => $row['dob'] ?? null,
+                'enrollment_status' => $row['enrollment_status'] ?? null,
+                'course' => $row['course'] ?? null,
+                'agreed_to_terms' => isset($row['agreed_to_terms']) ? (bool)$row['agreed_to_terms'] : null,
             ];
 
-            // If email is missing, avoid creating duplicate-null-key entries
-            if (empty($studentData['email'])) {
-                $msg = 'Missing email in CSV row; skipping to avoid unique index error';
+
+            // Ensure helper exists and call it from global namespace to avoid namespacing issues
+            if (! function_exists('student_validate')) {
+                $msg = 'Validation helper "student_validate" not available. Ensure app/helpers.php is autoloaded.';
+                Log::error($msg, ['job_id' => $this->jobId]);
+                $jobRecord->status = 'failed';
+                $jobRecord->error_message = $msg;
+                $jobRecord->save();
+                return;
+            }
+
+            try {
+                $validated = \student_validate($studentData);
+            } catch (\Illuminate\Validation\ValidationException $ve) {
+                $msg = 'CSV row validation failed: ' . implode('; ', array_map(function ($v) { return is_array($v) ? implode(', ', $v) : $v; }, $ve->errors()));
                 Log::warning($msg, ['job_id' => $this->jobId, 'row' => $row]);
                 $jobRecord->status = 'failed';
                 $jobRecord->error_message = $msg;
@@ -67,8 +84,8 @@ class ProcessCsvRow implements ShouldQueue
             // Upsert student by email if available, else by provided id or create new
             $student = null;
 
-            if (!empty($studentData['email'])) {
-                $student = Student::where('email', $studentData['email'])->first();
+            if (!empty($validated['email'])) {
+                $student = Student::where('email', $validated['email'])->first();
             }
 
             if (!$student && !empty($row['id'])) {
@@ -77,11 +94,15 @@ class ProcessCsvRow implements ShouldQueue
             }
 
             $isNew = false;
+            $apply = array_filter($validated, function ($v) {
+                return $v !== null;
+            });
+
             if ($student) {
-                $student->fill($studentData);
+                $student->fill($apply);
                 $student->save();
             } else {
-                $student = Student::create($studentData);
+                $student = Student::create($apply);
                 $isNew = true;
             }
 

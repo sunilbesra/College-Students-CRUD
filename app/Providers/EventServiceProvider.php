@@ -20,6 +20,13 @@ class EventServiceProvider extends ServiceProvider
         ],
         \App\Events\StudentCreated::class => [
             \App\Listeners\SendStudentNotificationListener::class,
+            \App\Listeners\MirrorStudentToBeanstalkListener::class,
+        ],
+        \App\Events\StudentUpdated::class => [
+            \App\Listeners\MirrorStudentToBeanstalkListener::class,
+        ],
+        \App\Events\StudentDeleted::class => [
+            \App\Listeners\MirrorStudentToBeanstalkListener::class,
         ],
         \App\Events\CsvBatchQueued::class => [
             \App\Listeners\DispatchCsvJobsListener::class,

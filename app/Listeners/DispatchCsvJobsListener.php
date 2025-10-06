@@ -5,7 +5,6 @@ namespace App\Listeners;
 use App\Events\CsvBatchQueued;
 use App\Jobs\ProcessCsvRow;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
 
 class DispatchCsvJobsListener
 {
@@ -26,7 +25,8 @@ class DispatchCsvJobsListener
 
         // Cache the latest batch metadata so the frontend can poll and show a notification.
         try {
-            Cache::put('csv_last_batch', $batchMeta, 300); // keep for 5 minutes
+            $store = app('csv.batch');
+            $store->put('csv_last_batch', $batchMeta, 300);
         } catch (\Throwable $ex) {
             Log::warning('Failed to cache csv_last_batch: ' . $ex->getMessage());
         }

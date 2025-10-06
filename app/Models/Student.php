@@ -23,6 +23,15 @@ class Student extends Model
         'agreed_to_terms',
     ];
 
+    /**
+     * Cast attributes to appropriate types.
+     */
+    protected $casts = [
+        'profile_image' => 'string',
+        'agreed_to_terms' => 'boolean',
+        'dob' => 'date',
+    ];
+
    
     public function scopeSearchText($query, ?string $term)
     {

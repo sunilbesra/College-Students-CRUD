@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Jobs\ProcessCsvRow;
+use App\Jobs\ProcessFormData;
+use Pheanstalk\Pheanstalk;
 use App\Models\CsvJob;
 use App\Events\CsvBatchQueued;
 
@@ -67,7 +69,7 @@ class CsvController extends Controller
         while (($row = fgetcsv($handle)) !== false) {
             $data = array_combine($header, $row);
 
-            try {
+                try {
                 // Save CSV row to MongoDB collection
                 $jobRecord = CsvJob::create([
                     'file_name' => $fileName,
@@ -80,6 +82,30 @@ class CsvController extends Controller
                 $batch[] = (string) $jobRecord->_id;
                 Log::debug('CSV row queued', ['file' => $fileName, 'row_identifier' => $jobRecord->row_identifier, 'job_id' => (string)$jobRecord->_id]);
                 $rowCount++;
+
+                // Dispatch background job to validate/process this row
+                ProcessFormData::dispatch($data, (string) $jobRecord->_id)
+                    ->onQueue(config('queue.connections.beanstalkd.queue') ?? env('BEANSTALKD_QUEUE', 'csv_jobs'));
+
+                // Also push a plain JSON mirror of the row to a separate tube for inspection in tools like Aurora
+                try {
+                    $pheanstalkHost = env('BEANSTALKD_QUEUE_HOST', '127.0.0.1');
+                    
+                    $pheanstalkPort = env('BEANSTALKD_PORT', 11300) ?: env('BEANSTALKD_PORT', 11300);
+                    $pheanstalk = Pheanstalk::create($pheanstalkHost, $pheanstalkPort);
+                    $mirrorTube = env('BEANSTALKD_JSON_TUBE', 'csv_jobs_json');
+                    $payload = json_encode([
+                        'file' => $fileName,
+                        'row_identifier' => $jobRecord->row_identifier,
+                        'job_id' => (string) $jobRecord->_id,
+                        'data' => $data,
+                        'queued_at' => now()->toDateTimeString(),
+                    ], JSON_UNESCAPED_UNICODE);
+                    // put with no delay and default priority
+                    $pheanstalk->useTube($mirrorTube)->put($payload);
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to write JSON mirror to beanstalk: ' . $e->getMessage());
+                }
 
                 // Dispatch batch via event if reached batch size
                 if (count($batch) >= $batchSize) {
