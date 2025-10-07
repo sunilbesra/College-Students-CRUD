@@ -3,17 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blog App</title>
+    <title>@yield('title', 'Student Management System')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="{{ asset('resources/css/app.css') }}" rel="stylesheet">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container">
-            <a class="navbar-brand" href="{{ url('/') }}">Blog</a>
+            <a class="navbar-brand" href="{{ url('/') }}">Student Management System</a>
             <div class="collapse navbar-collapse">
                 <ul class="navbar-nav me-auto">
-                    <!-- Posts link removed: posts routes not defined -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('students.index') }}">
+                            <i class="fas fa-users"></i> Students
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('form_submissions.index') }}">
+                            <i class="fas fa-file-alt"></i> Form Submissions
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="csvDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-upload"></i> CSV Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url('upload-csv') }}">Student CSV Upload</a></li>
+                            <li><a class="dropdown-item" href="{{ route('form_submissions.upload_csv') }}">Form Submission CSV</a></li>
+                        </ul>
+                    </li>
                 </ul>
             </div>
         </div>

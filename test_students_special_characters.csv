@@ -1,0 +1,8 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+Thomas "Tommy" O'Connor,thomas.oconnor@university.edu,+1234567890,1999-05-15,"Computer Science & AI",2024-09-01,A+,uploads/thomas_oconnor.jpg,"123 Main St, Apt 4B, New York, NY 10001"
+María José Hernández-López,maria.hernandez@university.edu,+34123456789,2000-08-22,Ingeniería Informática,2024-09-01,A,uploads/maria_hernandez.jpg,"Calle de Alcalá, 123, 28009 Madrid, España"
+Jean-Baptiste Müller,jean.mueller@university.edu,+4917612345678,1998-11-30,Maschinenbau,2024-09-01,B+,uploads/jean_mueller.jpg,"Unter den Linden 6, 10117 Berlin, Germany"
+Ñoño González,nono.gonzalez@university.edu,+5215512345678,2001-02-14,Ciencias de la Computación,2024-09-01,A-,uploads/nono_gonzalez.jpg,"Av. Universidad 3000, Coyoacán, 04510 CDMX, México"
+Пётр Иванов,petr.ivanov@university.edu,+79161234567,1999-07-08,Математика,2024-09-01,A+,uploads/petr_ivanov.jpg,"Ленинский проспект, д. 14, Москва 119991, Россия"
+李小明,li.xiaoming@university.edu,+8613812345678,2000-12-25,计算机科学,2024-09-01,A,uploads/li_xiaoming.jpg,"清华大学, 北京市海淀区 100084, 中国"
+مريم أحمد,mariam.ahmed@university.edu,+201234567890,1998-04-18,هندسة الحاسوب,2024-09-01,B+,uploads/mariam_ahmed.jpg,"جامعة القاهرة، الجيزة 12613، مصر"

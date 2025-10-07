@@ -1,0 +1,7 @@
+name,email,phone,course,grade,invalid_field
+Valid User 1,valid1@test.edu,+1111111111,Computer Science,A,should_be_ignored
+Valid User 2,valid2@test.edu,+2222222222,Mathematics,B+,also_ignored
+,missing_name@test.edu,+3333333333,Physics,C,missing_name
+Invalid User,invalid-email,+4444444444,Chemistry,D,bad_email
+Valid User 3,,+5555555555,Biology,A-,missing_email
+Too Many Commas,extra@test.edu,+6666666666,Engineering,B,extra,comma,fields

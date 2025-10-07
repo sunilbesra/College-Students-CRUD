@@ -274,6 +274,15 @@ ul.pagination .active span {
         </div>
         @endisset
 
+        <!-- Auto-refresh notification for CSV batch completion -->
+        <div id="csv-notification" style="display: none; background: #e7f4e7; color: #2d5a2d; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #2d5a2d;">
+            <strong>CSV Processing Complete!</strong>
+            <div id="csv-notification-details"></div>
+            <button onclick="location.reload()" style="margin-top: 10px; background: #2d5a2d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">
+                Refresh Page
+            </button>
+        </div>
+
         @isset($csvJobs)
         <h1 style="margin-top: 40px;">All CSV Jobs</h1>
         <table>
@@ -284,22 +293,39 @@ ul.pagination .active span {
                     <th>Row Identifier</th>
                     <th>Status</th>
                     <th>Error</th>
-                    <th>Data</th>
+                    <th>Data Preview</th>
                     <th>Created At</th>
                     <th>Updated At</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($csvJobs as $job)
-                <tr>
+                <tr style="@if($job->status === 'failed') background-color: #ffeaea; @elseif($job->status === 'completed') background-color: #eafaea; @elseif($job->status === 'processing') background-color: #fff3cd; @endif">
                     <td>{{ $loop->iteration + ($csvJobs->currentPage() - 1) * $csvJobs->perPage() }}</td>
                     <td>{{ $job->file_name ?? '-' }}</td>
                     <td>{{ $job->row_identifier ?? '-' }}</td>
-                    <td>{{ $job->status }}</td>
+                    <td>
+                        <span style="@if($job->status === 'completed') color: green; font-weight: bold; @elseif($job->status === 'failed') color: red; font-weight: bold; @elseif($job->status === 'processing') color: orange; font-weight: bold; @endif">
+                            {{ ucfirst($job->status) }}
+                        </span>
+                    </td>
                     <td><pre style="white-space:pre-wrap;max-height:120px;overflow:auto">{{ $job->error_message ?? '-' }}</pre></td>
-                    <td><pre>{{ json_encode($job->data, JSON_PRETTY_PRINT) }}</pre></td>
-                    <td>{{ $job->created_at }}</td>
-                    <td>{{ $job->updated_at }}</td>
+                    <td>
+                        @if($job->data && is_array($job->data))
+                            <div style="max-height: 100px; overflow-y: auto; font-size: 12px;">
+                                @foreach(array_slice($job->data, 0, 3, true) as $key => $value)
+                                    <strong>{{ $key }}:</strong> {{ is_string($value) ? Str::limit($value, 30) : json_encode($value) }}<br>
+                                @endforeach
+                                @if(count($job->data) > 3)
+                                    <em>... and {{ count($job->data) - 3 }} more fields</em>
+                                @endif
+                            </div>
+                        @else
+                            -
+                        @endif
+                    </td>
+                    <td>{{ $job->created_at?->format('Y-m-d H:i:s') ?? '-' }}</td>
+                    <td>{{ $job->updated_at?->format('Y-m-d H:i:s') ?? '-' }}</td>
                 </tr>
                 @endforeach
             </tbody>
@@ -307,9 +333,96 @@ ul.pagination .active span {
 
         <div>
             {{ $csvJobs->links('pagination::simple-default') }}
-
         </div>
         @endisset
     </div>
+
+    <script>
+        // Poll for CSV batch completion notifications
+        let lastBatchId = localStorage.getItem('lastCsvBatchId');
+        let pollInterval;
+        
+        function startPolling() {
+            if (pollInterval) return; // Already polling
+            
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/csv/last-batch');
+                    const result = await response.json();
+                    
+                    if (result.data && result.data.timestamp) {
+                        const batchId = result.data.timestamp;
+                        
+                        // Check if this is a new batch completion
+                        if (lastBatchId !== batchId) {
+                            lastBatchId = batchId;
+                            localStorage.setItem('lastCsvBatchId', batchId);
+                            
+                            // Show notification
+                            showCsvNotification(result.data);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error polling CSV batch status:', error);
+                }
+            }, 5000); // Poll every 5 seconds
+        }
+        
+        function showCsvNotification(batchData) {
+            const notification = document.getElementById('csv-notification');
+            const details = document.getElementById('csv-notification-details');
+            
+            details.innerHTML = `
+                File: <strong>${batchData.fileName || 'Unknown'}</strong><br>
+                Jobs processed: <strong>${batchData.count || 0}</strong><br>
+                Completed at: <strong>${batchData.timestamp}</strong>
+            `;
+            
+            notification.style.display = 'block';
+            
+            // Auto-hide after 30 seconds
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 30000);
+            
+            // Stop polling after notification
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+        
+        // Start polling when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Only start polling if there are queued or processing jobs
+            const queuedCount = {{ $progress['queued'] ?? 0 }};
+            const processingCount = {{ $progress['processing'] ?? 0 }};
+            
+            if (queuedCount > 0 || processingCount > 0) {
+                startPolling();
+            }
+        });
+        
+        // Auto-refresh progress every 10 seconds when there are active jobs
+        setInterval(() => {
+            const queuedCount = {{ $progress['queued'] ?? 0 }};
+            const processingCount = {{ $progress['processing'] ?? 0 }};
+            
+            if (queuedCount > 0 || processingCount > 0) {
+                // Only refresh if user hasn't interacted recently
+                const lastActivity = localStorage.getItem('lastUserActivity') || '0';
+                if (Date.now() - parseInt(lastActivity) > 10000) {
+                    location.reload();
+                }
+            }
+        }, 10000);
+        
+        // Track user activity
+        ['click', 'keypress', 'scroll'].forEach(event => {
+            document.addEventListener(event, () => {
+                localStorage.setItem('lastUserActivity', Date.now().toString());
+            });
+        });
+    </script>
 </body>
 </html>

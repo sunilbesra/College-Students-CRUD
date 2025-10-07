@@ -1,0 +1,6 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+Alice Johnson,alice.johnson@university.edu,+1234567890,1998-05-15,Computer Science,2024-09-01,A,uploads/alice_johnson.jpg,"123 University Ave, College Town, State 12345"
+Bob Smith,bob.smith@university.edu,+1987654321,1997-11-22,Mathematics,2024-09-01,B+,uploads/bob_smith.jpg,"456 Oak Street, Downtown, State 54321"
+Charlie Brown,charlie.brown@university.edu,+1555123456,1999-03-08,Physics,2024-09-01,A-,uploads/charlie_brown.jpg,"789 Pine Road, Suburb, State 98765"
+Diana Wilson,diana.wilson@university.edu,+1777888999,2000-07-19,Chemistry,2024-09-01,A+,uploads/diana_wilson.jpg,"321 Elm Street, Midtown, State 13579"
+Eva Martinez,eva.martinez@university.edu,+1444555666,1998-12-03,Biology,2024-09-01,B,uploads/eva_martinez.jpg,"654 Maple Drive, Uptown, State 24680"

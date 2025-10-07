@@ -36,9 +36,28 @@
                 </ul>
             </div>
 
-            <a href="{{ route('students.create') }}" class="btn btn-gradient-primary shadow">➕ Add Student</a>
+            <div class="d-flex align-items-center">
+                <a href="{{ route('students.create') }}" class="btn btn-gradient-primary shadow">➕ Add Student</a>
+
+                <form action="{{ route('csv.upload') }}" method="POST" enctype="multipart/form-data" class="d-flex align-items-center ms-3">
+                    @csrf
+                    <input type="file" name="csv_file" accept=".csv,text/csv" class="form-control form-control-sm" style="width:220px;" required>
+                    <button type="submit" class="btn btn-outline-success btn-sm ms-2">Import CSV</button>
+                </form>
+            </div>
         </div>
     </div>
+
+    @if(session('csv_failures'))
+        <div class="alert alert-warning mt-3">
+            <h5>CSV Import Failures</h5>
+            <ul class="small mb-0">
+                @foreach(session('csv_failures') as $f)
+                    <li>Row {{ $f['row'] ?? '?' }}: {{ is_array($f['errors']) ? implode('; ', array_map(function($e){ return is_array($e) ? implode(', ', $e) : $e; }, $f['errors'])) : ($f['error'] ?? '') }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     <!-- Flash message (for inline alert if needed) -->
     @if(session('success'))

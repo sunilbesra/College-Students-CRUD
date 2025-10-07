@@ -1,0 +1,6 @@
+name,email,phone,course,grade,enrollment_date,graduation_date
+Graduate Student 1,phd.student1@university.edu,+1111111111,Computer Science PhD,A,2021-09-01,2025-05-15
+Graduate Student 2,masters.student1@university.edu,+2222222222,Mathematics MS,A-,2023-01-15,2024-12-20
+Graduate Student 3,phd.student2@university.edu,+3333333333,Physics PhD,B+,2020-09-01,2024-08-30
+Graduate Student 4,masters.student2@university.edu,+4444444444,Chemistry MS,A,2023-09-01,2025-05-10
+Graduate Student 5,phd.student3@university.edu,+5555555555,Biology PhD,A-,2019-09-01,2024-12-15

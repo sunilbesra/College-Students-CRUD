@@ -1,0 +1,6 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+Test Student 1,duplicate@test.com,+1111111111,2000-01-01,Computer Science,2024-09-01,A,uploads/test1.jpg,"123 Test Street"
+Test Student 2,unique@test.com,+2222222222,2000-02-02,Mathematics,2024-09-02,B+,uploads/test2.jpg,"456 Test Avenue"
+Test Student 3,duplicate@test.com,+3333333333,2000-03-03,Physics,2024-09-03,A-,uploads/test3.jpg,"789 Test Road"
+Test Student 4,another@test.com,+4444444444,2000-04-04,Chemistry,2024-09-04,B,uploads/test4.jpg,"321 Test Lane"
+Test Student 5,john.anderson@university.edu,+5555555555,2000-05-05,Biology,2024-09-05,A+,uploads/test5.jpg,"654 Test Drive"

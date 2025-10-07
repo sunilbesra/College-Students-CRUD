@@ -3,8 +3,8 @@
 namespace App\Listeners;
 
 use App\Events\CsvBatchQueued;
-use App\Jobs\ProcessCsvRow;
-use App\Jobs\ProcessCsvBatch;
+use App\Jobs\ProcessStudentData;
+use App\Models\CsvJob;
 use Illuminate\Support\Facades\Log;
 
 class DispatchCsvJobsListener
@@ -37,18 +37,34 @@ class DispatchCsvJobsListener
             return;
         }
 
-        // Dispatch a single batch job which will process all jobIds. This avoids
-        // enqueuing one job per row at the moment the event is handled which
-        // previously resulted in duplicate/extra queue entries.
-        try {
-            $queueName = config('queue.connections.beanstalkd.queue') ?? env('BEANSTALKD_QUEUE', 'csv_jobs');
-            Log::info("Dispatching ProcessCsvBatch to queue={$queueName} for count=" . count($event->jobIds));
-            ProcessCsvBatch::dispatch($event->jobIds)
-                ->onQueue($queueName)
-                ->delay(now()->addSeconds(1));
-            Log::info("Dispatched ProcessCsvBatch for file: {$batchId}");
-        } catch (\Throwable $e) {
-            Log::error('Failed to dispatch ProcessCsvBatch: ' . $e->getMessage(), ['exception' => $e]);
+        $queueName = config('queue.connections.beanstalkd.queue') ?? env('BEANSTALKD_QUEUE', 'csv_jobs');
+        foreach ($event->jobIds as $jobId) {
+            try {
+                // Get the CsvJob record to extract data
+                $csvJob = CsvJob::find($jobId);
+                if (!$csvJob) {
+                    Log::warning("CsvJob not found for ID: {$jobId}");
+                    continue;
+                }
+
+                Log::debug("Dispatching ProcessStudentData for CSV jobId={$jobId} to queue={$queueName}");
+                
+                // Dispatch unified ProcessStudentData job for CSV processing
+                ProcessStudentData::dispatch(
+                    $csvJob->data,
+                    'create', // CSV uploads are always creates (or upserts)
+                    'csv',
+                    $jobId
+                )->onQueue($queueName)
+                 ->delay(now()->addSeconds(1));
+                
+                Log::info("Dispatched ProcessStudentData for CSV jobId={$jobId}");
+            } catch (\Throwable $e) {
+                Log::error("Failed to dispatch ProcessStudentData for CSV ID {$jobId}: " . $e->getMessage(), [
+                    'jobId' => $jobId,
+                    'exception' => $e,
+                ]);
+            }
         }
 
         Log::info("CsvBatchQueued dispatch completed for file: {$batchId}");

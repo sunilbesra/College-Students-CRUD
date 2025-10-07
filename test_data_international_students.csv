@@ -1,0 +1,6 @@
+name,email,phone,address,date_of_birth,course,enrollment_date,grade,profile_image,notes
+International Student 1,ahmed.hassan@university.edu,+20123456789,"Cairo University Street, Cairo, Egypt",1999-01-15,Computer Science,2024-09-01,A,uploads/ahmed.jpg,Exchange student from Egypt
+International Student 2,yuki.tanaka@university.edu,+81312345678,"Tokyo University Area, Tokyo, Japan",1998-03-22,Engineering,2024-09-01,A-,uploads/yuki.jpg,Exchange student from Japan
+International Student 3,maria.silva@university.edu,+5511987654321,"São Paulo University District, Brazil",2000-07-08,Business Administration,2024-09-01,B+,uploads/maria.jpg,Exchange student from Brazil
+International Student 4,pierre.dubois@university.edu,+33123456789,"Sorbonne Area, Paris, France",1999-11-14,Art History,2024-09-01,A,uploads/pierre.jpg,Exchange student from France
+International Student 5,amara.okafor@university.edu,+234123456789,"University of Lagos Area, Nigeria",1998-05-30,Literature,2024-09-01,A+,uploads/amara.jpg,Exchange student from Nigeria

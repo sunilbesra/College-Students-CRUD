@@ -1,0 +1,11 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+John Doe,john.doe@university.edu,+1234567890,1999-05-15,Computer Science,2024-09-01,A,uploads/john_doe.jpg,"123 Main Street, New York, NY 10001"
+Jane Smith,jane.smith@university.edu,+1987654321,2000-08-22,Mathematics,2024-09-01,A-,uploads/jane_smith.jpg,"456 Oak Avenue, Los Angeles, CA 90210"
+Michael Johnson,michael.johnson@university.edu,+1555123456,1998-11-30,Physics,2024-09-01,B+,uploads/michael_johnson.jpg,"789 Pine Road, Chicago, IL 60601"
+Emily Davis,emily.davis@university.edu,+1777888999,2001-02-14,Chemistry,2024-09-01,A+,uploads/emily_davis.jpg,"321 Elm Street, Houston, TX 77001"
+Robert Wilson,robert.wilson@university.edu,+1444555666,1999-07-08,Biology,2024-09-01,B,uploads/robert_wilson.jpg,"654 Maple Drive, Phoenix, AZ 85001"
+Sarah Brown,sarah.brown@university.edu,+1333222111,2000-12-25,Engineering,2024-09-01,A,uploads/sarah_brown.jpg,"987 Cedar Lane, Philadelphia, PA 19101"
+David Miller,david.miller@university.edu,+1666777888,1998-04-18,Business Administration,2024-09-01,B-,uploads/david_miller.jpg,"147 Birch Avenue, San Antonio, TX 78201"
+Lisa Anderson,lisa.anderson@university.edu,+1111222333,2001-09-03,Psychology,2024-09-01,A-,uploads/lisa_anderson.jpg,"258 Walnut Street, San Diego, CA 92101"
+Christopher Taylor,christopher.taylor@university.edu,+1999888777,1999-10-12,Art History,2024-09-01,B+,uploads/christopher_taylor.jpg,"369 Spruce Road, Dallas, TX 75201"
+Jennifer Martinez,jennifer.martinez@university.edu,+1888999000,2000-06-27,Literature,2024-09-01,A,uploads/jennifer_martinez.jpg,"741 Aspen Court, San Jose, CA 95101"

@@ -118,6 +118,31 @@
                     </div>
                 </div>
 
+                <!-- Navigation Links -->
+                <div class="flex justify-center mt-16">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 w-full max-w-4xl">
+                        <a href="{{ route('students.index') }}" class="bg-white dark:bg-gray-800/50 p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-250 text-center border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-center mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-blue-500">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Manage Students</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">View, add, edit, and delete student records</p>
+                        </a>
+
+                        <a href="{{ url('upload-csv') }}" class="bg-white dark:bg-gray-800/50 p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-250 text-center border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-center mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-green-500">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upload CSV</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Bulk import student data from CSV files</p>
+                        </a>
+                    </div>
+                </div>
+
                 <div class="flex justify-center mt-16 px-0 sm:items-center sm:justify-between">
                     <div class="text-center text-sm sm:text-left">
                         &nbsp;

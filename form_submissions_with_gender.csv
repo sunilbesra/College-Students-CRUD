@@ -1,0 +1,11 @@
+name,email,phone,gender,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+John Anderson,john.anderson@university.edu,+1234567890,male,1999-01-15,Computer Science,2024-09-01,A,uploads/john_anderson.jpg,"123 Main Street, Springfield, IL 62701"
+Sarah Johnson,sarah.johnson@university.edu,+1234567891,female,1998-05-20,Mathematics,2024-09-01,A-,uploads/sarah_johnson.jpg,"456 Oak Avenue, Portland, OR 97201"
+Michael Chen,michael.chen@university.edu,+1234567892,male,1999-11-08,Physics,2024-09-01,B+,uploads/michael_chen.jpg,"789 Pine Street, Seattle, WA 98101"
+Emily Rodriguez,emily.rodriguez@university.edu,+1234567893,female,2000-03-12,Biology,2024-09-01,A,uploads/emily_rodriguez.jpg,"321 Elm Drive, Austin, TX 78701"
+David Kim,david.kim@university.edu,+1234567894,male,1998-09-25,Chemistry,2024-09-01,B,uploads/david_kim.jpg,"654 Maple Lane, Denver, CO 80201"
+Lisa Thompson,lisa.thompson@university.edu,+1234567895,female,1999-07-03,Psychology,2024-09-01,A-,uploads/lisa_thompson.jpg,"987 Cedar Road, Miami, FL 33101"
+Carlos Mendoza,carlos.mendoza@university.edu,+1234567896,male,2000-01-18,Engineering,2024-09-01,B+,uploads/carlos_mendoza.jpg,"147 Birch Court, Phoenix, AZ 85001"
+Jessica Wong,jessica.wong@university.edu,+1234567897,female,1999-04-30,Literature,2024-09-01,A,uploads/jessica_wong.jpg,"258 Willow Street, Boston, MA 02101"
+Robert Taylor,robert.taylor@university.edu,+1234567898,male,1998-12-14,History,2024-09-01,B,uploads/robert_taylor.jpg,"369 Spruce Avenue, Chicago, IL 60601"
+Amanda Davis,amanda.davis@university.edu,+1234567899,female,2000-08-07,Art,2024-09-01,A-,uploads/amanda_davis.jpg,"741 Aspen Boulevard, Los Angeles, CA 90001"

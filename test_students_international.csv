@@ -1,0 +1,11 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+Ahmed Hassan,ahmed.hassan@university.edu,+201234567890,1999-01-15,Computer Science,2024-09-01,A,uploads/ahmed_hassan.jpg,"15 Tahrir Square, Cairo, Egypt"
+Yuki Tanaka,yuki.tanaka@university.edu,+81312345678,1998-03-22,Engineering,2024-09-01,A-,uploads/yuki_tanaka.jpg,"1-1-1 Shibuya, Tokyo 150-0002, Japan"
+Maria Silva,maria.silva@university.edu,+5511987654321,2000-07-08,Business Administration,2024-09-01,B+,uploads/maria_silva.jpg,"Rua Augusta 123, São Paulo, SP 01305-100, Brazil"
+Pierre Dubois,pierre.dubois@university.edu,+33123456789,1999-11-14,Art History,2024-09-01,A,uploads/pierre_dubois.jpg,"21 Rue de la Sorbonne, 75005 Paris, France"
+Amara Okafor,amara.okafor@university.edu,+2348123456789,1998-05-30,Literature,2024-09-01,A+,uploads/amara_okafor.jpg,"University of Lagos Road, Akoka, Lagos, Nigeria"
+Raj Patel,raj.patel@university.edu,+919876543210,2000-12-03,Mathematics,2024-09-01,A-,uploads/raj_patel.jpg,"IIT Campus, Powai, Mumbai 400076, India"
+Svetlana Petrov,svetlana.petrov@university.edu,+79161234567,1999-08-17,Physics,2024-09-01,B+,uploads/svetlana_petrov.jpg,"Moscow State University, Moscow 119991, Russia"
+Chen Wei,chen.wei@university.edu,+8613812345678,2001-04-25,Chemistry,2024-09-01,A,uploads/chen_wei.jpg,"Tsinghua University, Beijing 100084, China"
+Sofia Andersson,sofia.andersson@university.edu,+46701234567,1998-09-10,Biology,2024-09-01,B,uploads/sofia_andersson.jpg,"Karolinska Institute, Stockholm 171 77, Sweden"
+Marco Rossi,marco.rossi@university.edu,+393123456789,2000-01-28,Engineering,2024-09-01,A-,uploads/marco_rossi.jpg,"Università Bocconi, Milan 20136, Italy"

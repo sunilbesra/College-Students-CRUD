@@ -1,0 +1,9 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+Invalid Email,invalid.email.com,+1234567890,1999-05-15,Computer Science,2024-09-01,A,uploads/invalid1.jpg,"123 Main Street, New York, NY"
+Missing At Sign,missingatsign.university.edu,+1987654321,2000-08-22,Mathematics,2024-09-01,B+,uploads/invalid2.jpg,"456 Oak Avenue, Los Angeles, CA"
+John Future Birth,john.future@university.edu,+1555123456,2030-11-30,Physics,2024-09-01,A-,uploads/john_future.jpg,"789 Future Road, Chicago, IL"
+Jane Past Enrollment,jane.past@university.edu,+1777888999,1998-02-14,Chemistry,1990-09-01,A+,uploads/jane_past.jpg,"321 Past Street, Houston, TX"
+Invalid Phone Format,invalid.phone@university.edu,123-not-valid,2001-07-08,Biology,2024-09-01,B,uploads/invalid_phone.jpg,"654 Phone Drive, Phoenix, AZ"
+Very Long Name That Exceeds Normal Limits,toolong@university.edu,+1333222111,2000-12-25,Engineering,2024-09-01,A,uploads/toolong.jpg,"987 Long Name Lane, Philadelphia, PA"
+Invalid Grade Student,invalid.grade@university.edu,+1666777888,1998-04-18,Business Administration,2024-09-01,Z++,uploads/invalid_grade.jpg,"147 Grade Avenue, San Antonio, TX"
+Empty Required Fields,,,,,,,,"Empty Fields Street"

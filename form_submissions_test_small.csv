@@ -1,0 +1,4 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+Test Student 1,test1@university.edu,+1111111111,2000-01-01,Computer Science,2024-09-01,A,uploads/test1.jpg,"123 Test Street"
+Test Student 2,test2@university.edu,+2222222222,2000-02-02,Mathematics,2024-09-02,B+,uploads/test2.jpg,"456 Test Avenue"
+Test Student 3,test3@university.edu,+3333333333,2000-03-03,Physics,2024-09-03,A-,uploads/test3.jpg,"789 Test Road"

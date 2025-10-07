@@ -1,0 +1,9 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+Hiroshi Nakamura,hiroshi.nakamura@university.edu,+81312345678,1999-04-15,Computer Science,2024-09-01,A,uploads/hiroshi_nakamura.jpg,"1-2-3 Shibuya, Tokyo 150-0002, Japan"
+Fatima Al-Zahra,fatima.alzahra@university.edu,+971501234567,1998-08-22,Engineering,2024-09-01,A-,uploads/fatima_alzahra.jpg,"Dubai University City, Dubai, UAE"
+Giovanni Rossi,giovanni.rossi@university.edu,+393123456789,2000-01-28,Business Administration,2024-09-01,B+,uploads/giovanni_rossi.jpg,"Via Roma 123, Milan 20121, Italy"
+Priya Sharma,priya.sharma@university.edu,+919876543210,1999-11-05,Mathematics,2024-09-01,A+,uploads/priya_sharma.jpg,"Tech Park Road, Bangalore 560037, India"
+Lars Anderson,lars.anderson@university.edu,+46701234567,1998-06-18,Physics,2024-09-01,B,uploads/lars_anderson.jpg,"Kungsgatan 12, Stockholm 111 43, Sweden"
+Ana García,ana.garcia@university.edu,+34123456789,2000-09-30,Art History,2024-09-01,A-,uploads/ana_garcia.jpg,"Calle Mayor 45, Madrid 28013, Spain"
+Chen Wei,chen.wei@university.edu,+8613812345678,1999-02-14,Chemistry,2024-09-01,A,uploads/chen_wei.jpg,"Tsinghua University, Beijing 100084, China"
+Emma Thompson,emma.thompson@university.edu,+447712345678,1998-12-25,Literature,2024-09-01,B+,uploads/emma_thompson.jpg,"Oxford Street 789, London SW1A 1AA, UK"

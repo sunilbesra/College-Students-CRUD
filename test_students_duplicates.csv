@@ -1,0 +1,7 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+John Duplicate,john.duplicate@university.edu,+1234567890,1999-05-15,Computer Science,2024-09-01,A,uploads/john1.jpg,"123 Main Street, New York, NY"
+John Duplicate,john.duplicate@university.edu,+1234567890,1999-05-15,Computer Science,2024-09-01,A,uploads/john2.jpg,"123 Main Street, New York, NY"
+Jane Smith,jane.smith@university.edu,+1987654321,2000-08-22,Mathematics,2024-09-01,B+,uploads/jane1.jpg,"456 Oak Avenue, Los Angeles, CA"
+Jane Smith,jane.smith@duplicate.edu,+1987654321,2000-08-22,Physics,2024-09-01,A-,uploads/jane2.jpg,"789 Different Street, Los Angeles, CA"
+Michael Test,michael@university.edu,+1555123456,1998-11-30,Engineering,2024-09-01,C,uploads/michael.jpg,"321 Test Road, Chicago, IL"
+Michael Test,michael@university.edu,+1555123456,1998-11-30,Engineering,2024-09-01,A+,uploads/michael_updated.jpg,"321 Test Road, Chicago, IL"

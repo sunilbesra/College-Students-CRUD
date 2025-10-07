@@ -1,0 +1,16 @@
+name,email,phone,address,date_of_birth,course,enrollment_date,grade,profile_image
+Alice Johnson,alice.johnson@university.edu,+1234567890,"123 University Ave, College Town, CA 90210",1999-05-15,Computer Science,2024-09-01,A,uploads/alice.jpg
+Bob Smith,bob.smith@university.edu,+1987654321,"456 Oak Street, Campus City, NY 10001",1998-11-22,Mathematics,2024-09-01,B+,uploads/bob.jpg
+Charlie Brown,charlie.brown@university.edu,+1555666777,"789 Pine Road, Education Valley, TX 73301",2000-03-08,Physics,2024-09-01,A-,uploads/charlie.jpg
+Diana Wilson,diana.wilson@university.edu,+1444555666,"321 Elm Avenue, Scholar Hills, FL 33101",1999-07-19,Chemistry,2024-09-01,A+,uploads/diana.jpg
+Ethan Davis,ethan.davis@university.edu,+1333444555,"654 Maple Drive, Learning Grove, WA 98001",1998-12-03,Biology,2024-09-01,B,uploads/ethan.jpg
+Fiona Garcia,fiona.garcia@university.edu,+1222333444,"987 Cedar Lane, Knowledge Park, OR 97001",2000-01-27,Engineering,2024-09-01,A,uploads/fiona.jpg
+George Miller,george.miller@university.edu,+1111222333,"147 Birch Court, Wisdom Woods, CO 80001",1999-09-14,Business Administration,2024-09-01,B+,uploads/george.jpg
+Hannah Taylor,hannah.taylor@university.edu,+1999888777,"258 Spruce Street, Insight City, AZ 85001",1998-06-11,Psychology,2024-09-01,A-,uploads/hannah.jpg
+Ivan Rodriguez,ivan.rodriguez@university.edu,+1888777666,"369 Willow Way, Enlighten Town, NV 89001",2000-04-25,Art History,2024-09-01,B+,uploads/ivan.jpg
+Julia Martinez,julia.martinez@university.edu,+1777666555,"741 Aspen Road, Discover District, UT 84001",1999-10-02,Literature,2024-09-01,A,uploads/julia.jpg
+Kevin Anderson,kevin.anderson@university.edu,+1666555444,"852 Poplar Place, Research Ridge, ID 83001",1998-08-18,Sociology,2024-09-01,B,uploads/kevin.jpg
+Lisa Thompson,lisa.thompson@university.edu,+1555444333,"963 Hickory Hill, Study Summit, MT 59001",2000-02-14,Political Science,2024-09-01,A+,uploads/lisa.jpg
+Michael White,michael.white@university.edu,+1444333222,"159 Walnut Walk, Theory Valley, WY 82001",1999-12-07,Philosophy,2024-09-01,A-,uploads/michael.jpg
+Nancy Lewis,nancy.lewis@university.edu,+1333222111,"357 Chestnut Circle, Logic Lane, SD 57001",1998-04-30,Economics,2024-09-01,B+,uploads/nancy.jpg
+Oscar Clark,oscar.clark@university.edu,+1222111000,"468 Sycamore Street, Reason Road, ND 58001",2000-08-12,History,2024-09-01,A,uploads/oscar.jpg

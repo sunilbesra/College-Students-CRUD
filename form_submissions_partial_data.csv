@@ -1,0 +1,8 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+John Partial,john.partial@university.edu,,1999-05-15,Computer Science,2024-09-01,A,,
+Jane Missing Phone,jane.missing@university.edu,+1234567890,,Mathematics,2024-09-01,B+,uploads/jane.jpg,
+Mike No Course,mike.nocourse@university.edu,+1987654321,1998-11-30,,2024-09-01,A-,uploads/mike.jpg,"456 Oak Street, Boston, MA"
+,lisa.noname@university.edu,+1555666777,2000-06-20,Physics,2024-09-01,A+,uploads/lisa.jpg,"789 Pine Avenue, Seattle, WA"
+Robert No Email,,+1111222333,1999-01-05,Biology,2024-09-01,B,uploads/robert.jpg,"123 Elm Road, Portland, OR"
+Sarah Partial Data,sarah.partial@university.edu,+1444555666,2001-09-30,,2024-09-01,A,,"321 Cedar Lane, Denver, CO"
+Michael No Grade,michael.nograde@university.edu,+1777888999,1998-04-18,Engineering,2024-09-01,,uploads/michael.jpg,"654 Maple Street, Austin, TX"

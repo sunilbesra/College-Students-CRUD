@@ -1,0 +1,9 @@
+name,email,phone,date_of_birth,course,enrollment_date,grade,profile_image,address
+Alex Thompson,alex.thompson@university.edu,,1999-03-15,Computer Science,2024-09-01,A,,
+Maria Garcia,maria.garcia@university.edu,+1234567890,,Mathematics,2024-09-01,B+,uploads/maria.jpg,
+James Wilson,james.wilson@university.edu,+1987654321,2000-06-20,Physics,,A-,uploads/james.jpg,"456 Oak Street, Boston, MA"
+,sarah.jones@university.edu,+1555666777,1998-12-10,Chemistry,2024-09-01,A+,uploads/sarah.jpg,"789 Pine Avenue, Seattle, WA"
+Robert Lee,,+1111222333,2001-01-05,Biology,2024-09-01,B,uploads/robert.jpg,"123 Elm Road, Portland, OR"
+Lisa Chang,lisa.chang@university.edu,+1444555666,1999-09-30,,2024-09-01,A,uploads/lisa.jpg,"321 Cedar Lane, Denver, CO"
+Michael Brown,michael.brown@university.edu,+1777888999,2000-04-18,Engineering,2024-09-01,,uploads/michael.jpg,"654 Maple Street, Austin, TX"
+Emily White,emily.white@university.edu,+1333444555,1998-11-25,Business Administration,2024-09-01,C+,,"987 Birch Drive, Nashville, TN"

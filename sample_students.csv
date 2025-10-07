@@ -1,0 +1,6 @@
+name,email,contact,address,college,gender,dob,enrollment_status,course,agreed_to_terms
+John Doe,john.doe@example.com,+1234567890,123 Main St,ABC University,male,1990-01-15,full_time,Computer Science,1
+Jane Smith,jane.smith@example.com,+1987654321,456 Oak Ave,XYZ College,female,1991-05-20,part_time,Mathematics,1
+Bob Johnson,bob.johnson@example.com,+1122334455,789 Pine Rd,ABC University,male,1989-12-03,full_time,Engineering,1
+Alice Brown,alice.brown@example.com,+1555666777,321 Elm St,XYZ College,female,1992-08-10,part_time,Biology,1
+Charlie Wilson,charlie.wilson@example.com,+1999888777,654 Maple Dr,Tech Institute,other,1990-11-25,full_time,Information Technology,1
