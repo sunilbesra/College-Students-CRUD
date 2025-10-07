@@ -1,0 +1,2 @@
+name,email,phone,gender,course,grade,address,date_of_birth,enrollment_date
+New User,test@example.com,+1111111111,male,Engineering,A+,111 Test St,1998-01-01,2021-01-01

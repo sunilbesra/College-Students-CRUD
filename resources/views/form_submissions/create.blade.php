@@ -15,6 +15,24 @@
                 </div>
 
                 <div class="card-body">
+                    <!-- Display validation errors -->
+                    @if ($errors->any() || session('error'))
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <h6 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Validation Errors</h6>
+                            @if (session('error'))
+                                <p class="mb-2">{{ session('error') }}</p>
+                            @endif
+                            @if ($errors->any())
+                                <ul class="mb-0">
+                                    @foreach ($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    @endif
+
                     <form action="{{ route('form_submissions.store') }}" method="POST" enctype="multipart/form-data" id="submissionForm">
                         @csrf
 

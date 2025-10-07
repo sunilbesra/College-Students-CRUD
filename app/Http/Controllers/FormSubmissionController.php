@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\FormSubmission;
+use App\Services\FormSubmissionValidator;
 use Illuminate\Http\Request;
 use App\Jobs\ProcessFormSubmissionData;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 use Pheanstalk\Pheanstalk;
 
 class FormSubmissionController extends Controller
@@ -120,11 +122,21 @@ class FormSubmissionController extends Controller
             $formData['profile_image_path'] = $profileImagePath;
         }
 
+        // Validate form data including duplicate email check
+        try {
+            $validatedData = FormSubmissionValidator::validate($formData, $request->student_id);
+        } catch (ValidationException $e) {
+            return redirect()->back()
+                ->withErrors($e->errors())
+                ->withInput()
+                ->with('error', 'Please correct the validation errors and try again.');
+        }
+
         // Prepare data for direct Beanstalk processing
         $submissionData = [
             'operation' => $request->operation,
             'student_id' => $request->student_id,
-            'data' => $formData,
+            'data' => $validatedData,
             'source' => $request->source,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
@@ -275,6 +287,8 @@ class FormSubmissionController extends Controller
             'file_path' => $fullPath
         ]);
 
+        // Read all CSV data first
+        $csvData = [];
         while (($row = fgetcsv($handle)) !== false) {
             $rowCount++;
             
@@ -294,69 +308,50 @@ class FormSubmissionController extends Controller
                 continue;
             }
 
-            try {
-                // Combine headers with row data
-                $rowData = array_combine($headers, $row);
-                
-                // Clean up the data (remove empty strings, trim whitespace)
-                $cleanData = [];
-                foreach ($rowData as $key => $value) {
-                    $cleanedValue = trim($value);
-                    if ($cleanedValue !== '') {
-                        $cleanData[$key] = $cleanedValue;
-                    }
-                }
-
-                // Check for duplicate email within this CSV file
-                $email = $cleanData['email'] ?? null;
-                if ($email) {
-                    if (in_array(strtolower($email), $csvEmails)) {
-                        $error = "Row {$rowCount}: Duplicate email '{$email}' found within CSV file";
-                        $errors[] = $error;
-                        $duplicateEmails[] = $email;
-                        Log::warning($error, ['row' => $rowCount, 'email' => $email]);
-                        continue; // Skip this row
-                    }
-                    $csvEmails[] = strtolower($email);
-
-                    // Check if email already exists in database
-                    $existingStudent = \App\Models\Student::where('email', $email)->first();
-                    if ($existingStudent && $operation === 'create') {
-                        $error = "Row {$rowCount}: Email '{$email}' already exists in database (Student ID: {$existingStudent->_id})";
-                        $errors[] = $error;
-                        $duplicateEmails[] = $email;
-                        Log::warning($error, ['row' => $rowCount, 'email' => $email]);
-                        continue; // Skip this row
-                    }
-                }
-                
-                // Collect valid rows for batch processing
-                $validRows[] = [
-                    'operation' => $operation,
-                    'student_id' => $cleanData['student_id'] ?? null,
-                    'data' => $cleanData,
-                    'source' => 'csv',
-                    'csv_row' => $rowCount
-                ];
-
-                $processedCount++;
-                
-                Log::debug('CSV row sent to Beanstalk for processing', [
-                    'csv_file' => $file->getClientOriginalName(),
-                    'row' => $rowCount,
-                    'data_keys' => array_keys($cleanData),
-                    'queue' => env('BEANSTALKD_FORM_SUBMISSION_QUEUE', 'form_submission_jobs')
-                ]);
-                
-            } catch (\Exception $e) {
-                $error = "Error processing row {$rowCount}: " . $e->getMessage();
-                $errors[] = $error;
-                Log::error($error, [
-                    'row_data' => $row,
-                    'exception' => $e->getTraceAsString()
-                ]);
-            }
+            // Combine headers with row data
+            $rowData = array_combine($headers, $row);
+            $csvData[] = $rowData;
         }
+
+        // Use FormSubmissionValidator for batch validation
+        $validationResults = FormSubmissionValidator::validateCsvBatch($csvData);
+        $summary = FormSubmissionValidator::getCsvValidationSummary($validationResults);
+
+        // Process valid rows
+        foreach ($validationResults['valid'] as $validRow) {
+            $validRows[] = [
+                'operation' => $operation,
+                'student_id' => $validRow['data']['student_id'] ?? null,
+                'data' => $validRow['data'],
+                'source' => 'csv',
+                'csv_row' => $validRow['row']
+            ];
+        }
+
+        // Collect errors from validation
+        foreach ($validationResults['invalid'] as $invalidRow) {
+            $errorMessages = [];
+            foreach ($invalidRow['errors'] as $field => $fieldErrors) {
+                $errorMessages[] = "$field: " . implode(', ', $fieldErrors);
+            }
+            $errors[] = "Row {$invalidRow['row']}: " . implode(' | ', $errorMessages);
+        }
+
+        // Collect duplicate errors
+        foreach ($validationResults['duplicates'] as $duplicate) {
+            $errors[] = "Row {$duplicate['row']}: {$duplicate['error']}";
+            $duplicateEmails[] = $duplicate['email'];
+        }
+
+        $processedCount = count($validRows);
+        
+        Log::info('CSV validation completed', [
+            'csv_file' => $file->getClientOriginalName(),
+            'total_rows' => $summary['total_rows'],
+            'valid_rows' => $summary['valid_rows'],
+            'invalid_rows' => $summary['invalid_rows'],
+            'duplicate_rows' => $summary['duplicate_rows']
+        ]);
 
         fclose($handle);
 
@@ -387,29 +382,31 @@ class FormSubmissionController extends Controller
         }
 
         Log::info('CSV file processed for form submissions', [
-            'total_rows' => $rowCount,
+            'total_rows' => $summary['total_rows'],
+            'valid_rows' => $summary['valid_rows'],
+            'invalid_rows' => $summary['invalid_rows'],
+            'duplicate_rows' => $summary['duplicate_rows'],
             'processed_rows' => $processedCount,
-            'operation' => $operation,
-            'errors_count' => count($errors),
-            'duplicate_emails_count' => count($duplicateEmails)
+            'operation' => $operation
         ]);
 
         // Build detailed success/warning message
-        $message = "CSV processed! {$processedCount} form submissions queued for processing.";
+        $message = "CSV processed! {$summary['valid_rows']} form submissions queued for processing.";
         $alertType = 'success';
         
-        if (!empty($duplicateEmails)) {
-            $duplicateCount = count($duplicateEmails);
-            $message .= " {$duplicateCount} duplicate emails were skipped.";
+        if ($summary['duplicate_rows'] > 0) {
+            $message .= " {$summary['duplicate_rows']} duplicate emails were skipped.";
             $alertType = 'warning';
         }
         
-        if (!empty($errors)) {
-            $errorCount = count($errors) - count($duplicateEmails); // Non-duplicate errors
-            if ($errorCount > 0) {
-                $message .= " {$errorCount} other validation errors occurred.";
-                $alertType = 'warning';
-            }
+        if ($summary['invalid_rows'] > 0) {
+            $message .= " {$summary['invalid_rows']} validation errors occurred.";
+            $alertType = 'warning';
+        }
+
+        if ($summary['total_rows'] === 0) {
+            $message = "No valid data found in CSV file.";
+            $alertType = 'error';
         }
 
         // Store detailed errors in session for display

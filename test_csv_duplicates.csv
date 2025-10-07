@@ -1,0 +1,6 @@
+name,email,phone,gender,course,grade,address,date_of_birth,enrollment_date
+John Doe,john@example.com,+1234567890,male,Computer Science,A,123 Main St,1995-01-15,2020-09-01
+Jane Smith,jane@example.com,+0987654321,female,Mathematics,B+,456 Oak Ave,1996-03-22,2020-09-01
+Mike Johnson,john@example.com,+1122334455,male,Physics,A-,789 Pine Rd,1995-07-10,2020-09-01
+Alice Brown,alice@example.com,+5566778899,female,Chemistry,A,321 Elm St,1997-11-05,2020-09-01
+Bob Wilson,jane@example.com,+4433221100,male,Biology,B,654 Maple Dr,1996-09-18,2020-09-01
