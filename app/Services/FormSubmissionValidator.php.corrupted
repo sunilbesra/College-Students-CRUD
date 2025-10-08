@@ -1,0 +1,349 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\FormSubmission;
+use App\Events\DuplicateEmailDetected        // Check for duplicate email in FormSubmission collection
+        if (isset($validatedData['email'])) {
+            $duplicateSubmission = static::findDuplicateEmail($validatedData['email'], $ignoreId);
+            if ($duplicateSubmission) {
+                throw ValidationException::withMessages([
+                    'email' => ['This email address is already registered.']
+                ]);
+            }
+        }\Support\Facades\Validator;
+use Il        // Check for duplicate email in FormSubmission collection
+        if (isset($validatedData['email'])) {
+            $duplicateSubmission = static::findDuplicateEmail($validatedData['email'], $ignoreId);
+            if ($duplicateSub            $duplicateSubmission = statissioc::fin) {
+                throw ValiddDuplicateEmail($validationException::withMessagedData['email'], $ignoreId);
+            if ($duplicateSubmission) {
+                throw ValidationException::withMessages([
+                    'email' => ['This email address is already registered.']
+                ]);
+            }s([
+                    'email' => ['This email address is already registered.']
+                ]);
+            }
+        }Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+
+class FormSubmissionValidator
+{
+    /**
+     * Return validation rules for form submission student data.
+     */
+    public static function rules($ignoreId = null)
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'phone' => ['nullable', 'integer', 'min:1000000000', 'max:99999999999999'], // Optional but must be integer if provided
+            'gender' => ['required', 'string', 'in:male,female'],
+            'date_of_birth' => ['nullable', 'date', 'date_format:Y-m-d'],
+            'course' => ['nullable', 'string', 'max:255'],
+            'enrollment_date' => ['nullable', 'date', 'date_format:Y-m-d'],
+            'grade' => ['nullable', 'string', 'max:10'],
+            'profile_image_path' => ['nullable', 'string', 'max:500'],
+            'address' => ['nullable', 'string', 'max:1000'],
+        ];
+    }
+
+    /**
+     * Return validation rules for CSV upload where all fields are required.
+     */
+    public static function csvRules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'phone' => ['required', 'integer', 'min:1000000000', 'max:99999999999999'], // Only integers, 10-14 digits
+            'gender' => ['required', 'string', 'in:male,female'],
+            'date_of_birth' => ['required', 'date', 'date_format:Y-m-d'],
+            'course' => ['required', 'string', 'max:255'],
+            'enrollment_date' => ['required', 'date', 'date_format:Y-m-d'],
+            'grade' => ['required', 'string', 'max:10'],
+            'profile_image_path' => ['required', 'string', 'max:500'],
+            'address' => ['required', 'string', 'max:1000'],
+        ];
+    }
+
+    /**
+     * Validate form submission data array and return validated data.
+     * @throws ValidationException
+     */
+    public static function validate(array $data, $ignoreId = null): array
+    {
+        // Clean the data first
+        $cleanedData = [];
+        foreach ($data as $key => $value) {
+            $cleanedValue = is_string($value) ? trim($value) : $value;
+            if ($cleanedValue !== '' && $cleanedValue !== null) {
+                $cleanedData[$key] = $cleanedValue;
+            }
+        }
+
+        $validator = Validator::make($cleanedData, static::rules($ignoreId));
+        
+        // Add custom validation messages
+        $validator->setCustomMessages([
+            'name.required' => 'Student name is required.',
+            'email.required' => 'Student email is required.',
+            'email.email' => 'Please provide a valid email address.',
+            'phone.integer' => 'Phone number must contain only digits (e.g., 1234567890).',
+            'phone.min' => 'Phone number must be at least 10 digits.',
+            'phone.max' => 'Phone number must not exceed 14 digits.',
+            'gender.required' => 'Gender selection is required.',
+            'gender.in' => 'Gender must be either male or female.',
+            'date_of_birth.date' => 'Date of birth must be a valid date.',
+            'date_of_birth.date_format' => 'Date of birth must be in YYYY-MM-DD format.',
+            'enrollment_date.date' => 'Enrollment date must be a valid date.',
+            'enrollment_date.date_format' => 'Enrollment date must be in YYYY-MM-DD format.',
+        ]);
+
+        // Validate basic rules first
+        $validatedData = $validator->validate();
+
+        // Check for duplicate email in FormSubmission collection
+        if (isset($validatedData['email'])) {
+            $duplicateSubmission = static::findDuplicateEmail($validatedData['email'], $ignoreId);
+            if ($duplicateSubmission) {
+                // Add unique debug info to identify this is our code
+                Log::error('FormSubmissionValidator: DUPLICATE FOUND IN VALIDATE METHOD', [
+                    'email' => $validatedData['email'],
+                    'ignoreId' => $ignoreId,
+                    'duplicate_id' => $duplicateSubmission->_id,
+                    'duplicate_status' => $duplicateSubmission->status
+                ]);
+                throw ValidationException::withMessages([
+                    'email' => ['This email address is already registered (DEBUG: from FormSubmissionValidator validate method).']
+                ]);
+            }
+        }
+
+        return $validatedData;
+    }
+
+    /**
+     * Validate CSV data with all fields required
+     * @throws ValidationException
+     */
+    public static function validateCsv(array $data, $ignoreId = null): array
+    {
+        // Clean the data first
+        $cleanedData = [];
+        foreach ($data as $key => $value) {
+            $cleanedValue = is_string($value) ? trim($value) : $value;
+            if ($cleanedValue !== '' && $cleanedValue !== null) {
+                $cleanedData[$key] = $cleanedValue;
+            }
+        }
+
+        $validator = Validator::make($cleanedData, static::csvRules());
+        
+        // Add CSV-specific validation messages
+        $validator->setCustomMessages([
+            'name.required' => 'Student name is required.',
+            'email.required' => 'Student email is required.',
+            'email.email' => 'Please provide a valid email address.',
+            'phone.required' => 'Phone number is required.',
+            'phone.integer' => 'Phone number must contain only digits (e.g., 1234567890).',
+            'phone.min' => 'Phone number must be at least 10 digits.',
+            'phone.max' => 'Phone number must not exceed 14 digits.',
+            'gender.required' => 'Gender selection is required.',
+            'gender.in' => 'Gender must be either male or female.',
+            'date_of_birth.required' => 'Date of birth is required.',
+            'date_of_birth.date' => 'Date of birth must be a valid date.',
+            'date_of_birth.date_format' => 'Date of birth must be in YYYY-MM-DD format.',
+            'course.required' => 'Course is required.',
+            'enrollment_date.required' => 'Enrollment date is required.',
+            'enrollment_date.date' => 'Enrollment date must be a valid date.',
+            'enrollment_date.date_format' => 'Enrollment date must be in YYYY-MM-DD format.',
+            'grade.required' => 'Grade is required.',
+            'profile_image_path.required' => 'Profile image path is required.',
+            'address.required' => 'Address is required.',
+        ]);
+
+        // Validate basic rules first
+        $validatedData = $validator->validate();
+
+        // Check for duplicate email in FormSubmission collection
+        if (isset($validatedData['email'])) {
+            $duplicateSubmission = static::findDuplicateEmail($validatedData['email'], $ignoreId);
+            if ($duplicateSubmission) {
+                throw ValidationException::withMessages([
+                    'email' => ['This email address is already registered (DEBUG: from validateCsv method).']
+                ]);
+            }
+        }
+
+        return $validatedData;
+    }
+
+    /**
+     * Map form submission data to student model format.
+     * This handles any field name differences between form submissions and the student model.
+     */
+    public static function mapToStudentData(array $formData): array
+    {
+        return [
+            'name' => $formData['name'] ?? null,
+            'email' => $formData['email'] ?? null,
+            'contact' => $formData['phone'] ?? null, // Map phone to contact for student model
+            'address' => $formData['address'] ?? null,
+            'dob' => $formData['date_of_birth'] ?? null, // Map date_of_birth to dob
+            'course' => $formData['course'] ?? null,
+            'profile_image' => $formData['profile_image_path'] ?? null, // Map profile_image_path to profile_image
+            'enrollment_date' => $formData['enrollment_date'] ?? null,
+            'grade' => $formData['grade'] ?? null,
+            'gender' => $formData['gender'] ?? null, // Map gender from form data
+            // Set default values for required student fields that don't exist in form submissions
+            'college' => 'Unknown', // Default college value
+            'enrollment_status' => 'full_time', // Default enrollment status
+            'agreed_to_terms' => true, // Assume terms are agreed if submitting
+        ];
+    }
+
+    /**
+     * Validate form submission data for FormSubmission model only
+     */
+    public static function validateForFormSubmission(array $data, $ignoreId = null): array
+    {
+        return static::validate($data, $ignoreId);
+    }
+
+    /**
+     * Check if email already exists in FormSubmission collection
+     */
+    public static function findDuplicateEmail(string $email, $ignoreId = null): ?FormSubmission
+    {
+        // Only check completed submissions for duplicates
+        // Don't check 'processing' status as that includes the current submission being processed
+        $query = FormSubmission::where('data.email', $email)
+            ->where('status', 'completed');
+            
+        if ($ignoreId) {
+            // MongoDB ObjectId exclusion - try multiple approaches for compatibility
+            $query->where('_id', '!=', $ignoreId);
+        }
+        
+        return $query->first();
+    }
+
+    /**
+     * Validate CSV batch data and return validation results
+     */
+    public static function validateCsvBatch(array $csvData): array
+    {
+        $results = [
+            'valid' => [],
+            'invalid' => [],
+            'duplicates' => []
+        ];
+
+        $emailsInBatch = [];
+        
+        foreach ($csvData as $index => $row) {
+            try {
+                // Check for duplicate within the batch
+                $email = trim($row['email'] ?? '');
+                if (!empty($email)) {
+                    if (isset($emailsInBatch[$email])) {
+                        $results['duplicates'][] = [
+                            'row' => $index + 2, // +2 for 1-based indexing and header row
+                            'email' => $email,
+                            'error' => "Duplicate email found in CSV at row {$emailsInBatch[$email]} and row " . ($index + 2)
+                        ];
+                        continue;
+                    }
+                    $emailsInBatch[$email] = $index + 2;
+
+                    // Check for duplicate in database
+                    if (static::findDuplicateEmail($email)) {
+                        $results['duplicates'][] = [
+                            'row' => $index + 2,
+                            'email' => $email,
+                            'error' => 'This email address is already registered in the system.'
+                        ];
+                        continue;
+                    }
+                }
+
+                // Validate the row data using CSV-specific rules (all fields required)
+                $validatedRow = static::validateCsv($row);
+                $results['valid'][] = [
+                    'row' => $index + 2,
+                    'data' => $validatedRow
+                ];
+                
+            } catch (ValidationException $e) {
+                $results['invalid'][] = [
+                    'row' => $index + 2,
+                    'data' => $row,
+                    'errors' => $e->errors()
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Get validation summary for CSV upload
+     */
+    public static function getCsvValidationSummary(array $validationResults): array
+    {
+        $validCount = count($validationResults['valid']);
+        $invalidCount = count($validationResults['invalid']);
+        $duplicateCount = count($validationResults['duplicates']);
+        $totalCount = $validCount + $invalidCount + $duplicateCount;
+
+        return [
+            'total_rows' => $totalCount,
+            'valid_rows' => $validCount,
+            'invalid_rows' => $invalidCount,
+            'duplicate_rows' => $duplicateCount,
+            'can_process' => $validCount > 0,
+            'has_errors' => ($invalidCount + $duplicateCount) > 0
+        ];
+    }
+
+    /**
+     * Get list of required fields for CSV upload
+     */
+    public static function getRequiredCsvFields(): array
+    {
+        return [
+            'name' => 'Student full name',
+            'email' => 'Valid email address',
+            'phone' => 'Phone number (integers only, 10-14 digits)',
+            'gender' => 'Gender (male/female)',
+            'date_of_birth' => 'Date of birth (YYYY-MM-DD)',
+            'course' => 'Course name',
+            'enrollment_date' => 'Enrollment date (YYYY-MM-DD)',
+            'grade' => 'Current grade',
+            'profile_image_path' => 'Profile image path or URL',
+            'address' => 'Full address'
+        ];
+    }
+
+    /**
+     * Get CSV field validation rules as human-readable format
+     */
+    public static function getCsvFieldDescriptions(): array
+    {
+        return [
+            'name' => 'Required, maximum 255 characters',
+            'email' => 'Required, valid email format, maximum 255 characters',
+            'phone' => 'Required, integers only (10-14 digits, e.g., 1234567890)',
+            'gender' => 'Required, must be "male" or "female"',
+            'date_of_birth' => 'Required, valid date in YYYY-MM-DD format',
+            'course' => 'Required, maximum 255 characters',
+            'enrollment_date' => 'Required, valid date in YYYY-MM-DD format',
+            'grade' => 'Required, maximum 10 characters',
+            'profile_image_path' => 'Required, maximum 500 characters',
+            'address' => 'Required, maximum 1000 characters'
+        ];
+    }
+}

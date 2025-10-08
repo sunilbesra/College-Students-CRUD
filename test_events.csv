@@ -1,0 +1,4 @@
+name,email,phone,gender,course,grade
+Event Test User 1,eventtest1@example.com,+1234567890,male,Computer Science,A
+Event Test User 2,eventtest2@example.com,+0987654321,female,Mathematics,B
+Event Test User 3,eventtest1@example.com,+1122334455,male,Physics,C

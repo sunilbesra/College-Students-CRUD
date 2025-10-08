@@ -154,11 +154,10 @@
                                 <thead class="table-dark">
                                     <tr>
                                         <th>ID</th>
-                                        <th>Status</th>
+                                        <!-- <th>Status</th> -->
                                         <th>Operation</th>
                                         <th>Source</th>
                                         <th style="width: 400px;">Full Data Preview</th>
-                                        <th>Error</th>
                                         <th>Created</th>
                                         <th>Actions</th>
                                     </tr>
@@ -169,7 +168,7 @@
                                             <td>
                                                 <small class="text-muted">{{ substr($submission->_id, -8) }}</small>
                                             </td>
-                                            <td>
+                                            <!-- <td>
                                                 @php
                                                     $statusClass = match($submission->status) {
                                                         'queued' => 'warning',
@@ -182,7 +181,7 @@
                                                 <span class="badge bg-{{ $statusClass }}">
                                                     {{ ucfirst($submission->status) }}
                                                 </span>
-                                            </td>
+                                            </td> -->
                                             <td>
                                                 <span class="badge bg-primary">{{ ucfirst($submission->operation) }}</span>
                                             </td>
@@ -201,13 +200,36 @@
                                             <td style="max-width: 400px;">
                                                 @if(is_array($submission->data))
                                                     <div class="d-flex align-items-start">
-                                                        @if(isset($submission->data['profile_image_path']) && $submission->data['profile_image_path'])
-                                                            <img src="{{ asset($submission->data['profile_image_path']) }}" 
-                                                                 alt="Profile" 
-                                                                 class="rounded-circle me-2 flex-shrink-0" 
-                                                                 style="width: 40px; height: 40px; object-fit: cover;"
-                                                                 onerror="this.style.display='none'">
-                                                        @endif
+                                                        <!-- Enhanced Profile Image Display -->
+                                                        <div class="me-2 flex-shrink-0 position-relative">
+                                                            @if(isset($submission->data['profile_image_path']) && $submission->data['profile_image_path'])
+                                                                <img src="{{ asset($submission->data['profile_image_path']) }}" 
+                                                                     alt="Profile Image for {{ $submission->data['name'] ?? 'Student' }}" 
+                                                                     class="rounded-circle border border-2 border-light shadow-sm" 
+                                                                     style="width: 50px; height: 50px; object-fit: cover; cursor: pointer;"
+                                                                     onerror="handleImageError(this)"
+                                                                     data-bs-toggle="modal" 
+                                                                     data-bs-target="#imageModal{{ $submission->_id }}"
+                                                                     title="Click to view full image">
+                                                                <!-- Status indicator for image -->
+                                                                <div class="position-absolute bottom-0 end-0">
+                                                                    <i class="fas fa-camera text-success bg-white rounded-circle p-1" 
+                                                                       style="font-size: 10px; border: 1px solid #dee2e6;"></i>
+                                                                </div>
+                                                            @else
+                                                                <!-- Default avatar when no image -->
+                                                                <div class="rounded-circle bg-light border border-2 border-secondary d-flex align-items-center justify-content-center"
+                                                                     style="width: 50px; height: 50px;">
+                                                                    <i class="fas fa-user text-muted"></i>
+                                                                </div>
+                                                                <!-- No image indicator -->
+                                                                <div class="position-absolute bottom-0 end-0">
+                                                                    <i class="fas fa-times text-danger bg-white rounded-circle p-1" 
+                                                                       style="font-size: 10px; border: 1px solid #dee2e6;"></i>
+                                                                </div>
+                                                            @endif
+                                                        </div>
+
                                                         <div class="flex-grow-1">
                                                             <div class="mb-1">
                                                                 <strong class="text-primary">{{ $submission->data['name'] ?? 'N/A' }}</strong>
@@ -250,15 +272,6 @@
                                                             @endif
                                                         </div>
                                                     </div>
-                                                @else
-                                                    <small class="text-muted">—</small>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                @if($submission->error_message)
-                                                    <small class="text-danger" title="{{ $submission->error_message }}">
-                                                        {{ Str::limit($submission->error_message, 30) }}
-                                                    </small>
                                                 @else
                                                     <small class="text-muted">—</small>
                                                 @endif
@@ -318,6 +331,46 @@
     </div>
 </div>
 
+<!-- Image Modal for Full-Size Preview -->
+@foreach($submissions as $submission)
+    @if(isset($submission->data['profile_image_path']) && $submission->data['profile_image_path'])
+        <div class="modal fade" id="imageModal{{ $submission->_id }}" tabindex="-1" aria-labelledby="imageModalLabel{{ $submission->_id }}" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="imageModalLabel{{ $submission->_id }}">
+                            Profile Image - {{ $submission->data['name'] ?? 'Student' }}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <img src="{{ asset($submission->data['profile_image_path']) }}" 
+                             alt="Full Profile Image for {{ $submission->data['name'] ?? 'Student' }}" 
+                             class="img-fluid rounded border"
+                             style="max-height: 70vh; width: auto;">
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                Profile image for {{ $submission->data['name'] ?? 'Student' }}
+                                <br>
+                                <span class="badge bg-light text-dark">{{ $submission->data['email'] ?? 'No email' }}</span>
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <a href="{{ asset($submission->data['profile_image_path']) }}" 
+                           target="_blank" 
+                           class="btn btn-primary btn-sm">
+                            <i class="fas fa-external-link-alt"></i> Open in New Tab
+                        </a>
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+@endforeach
+
 <style>
 .table th {
     white-space: nowrap;
@@ -341,5 +394,61 @@
 .flex-grow-1 {
     flex-grow: 1;
 }
+
+/* Enhanced Profile Image Styles */
+.profile-image-container {
+    position: relative;
+    display: inline-block;
+}
+
+.profile-image-container img {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.profile-image-container img:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.profile-status-indicator {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.default-avatar {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 2px dashed #dee2e6;
+    transition: all 0.2s ease;
+}
+
+.default-avatar:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    border-color: #adb5bd;
+}
+
+/* Modal Image Styles */
+.modal .img-fluid {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.modal-body .badge {
+    font-size: 0.8em;
+}
 </style>
+
+<script>
+function handleImageError(img) {
+    img.src = '{{ asset("images/default-avatar.svg") }}';
+    img.onerror = null; // Prevent infinite loop
+    img.title = 'Default avatar - Image not found';
+}
+</script>
 @endsection

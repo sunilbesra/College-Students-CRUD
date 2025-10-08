@@ -123,14 +123,21 @@
                                     <!-- Phone -->
                                     <div class="col-md-6 mb-3">
                                         <label for="data_phone" class="form-label">Phone</label>
-                                        <input type="tel" 
+                                        <input type="number" 
                                                class="form-control @error('data.phone') is-invalid @enderror" 
                                                id="data_phone" 
                                                name="data[phone]" 
-                                               value="{{ old('data.phone') }}">
+                                               value="{{ old('data.phone') }}"
+                                               min="1000000000"
+                                               max="99999999999999"
+                                               placeholder="e.g., 1234567890">
                                         @error('data.phone')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
+                                        <small class="form-text text-muted">
+                                            <i class="fas fa-info-circle"></i> 
+                                            Enter digits only (10-14 digits, no symbols or spaces)
+                                        </small>
                                     </div>
 
                                     <!-- Gender -->

@@ -36,9 +36,12 @@
                         <ul class="mb-0">
                             <li>CSV file should have headers in the first row</li>
                             <li>Maximum file size: 10MB</li>
-                            <li>Supported columns: name, email, phone, gender, address, date_of_birth, course, enrollment_date, grade, profile_image_path (URL or path), student_id</li>
-                            <li>Required columns: <strong>name</strong> and <strong>email</strong> (except for delete operations)</li>
-                            <li>For update/delete operations, include <strong>student_id</strong> column</li>
+                            <li><strong>ALL FIELDS ARE REQUIRED</strong> for CSV uploads</li>
+                            <li>Required columns: <strong>name, email, phone, gender, date_of_birth, course, enrollment_date, grade, profile_image_path, address</strong></li>
+                            <li>For update/delete operations, also include <strong>student_id</strong> column</li>
+                            <li>Date format: YYYY-MM-DD (e.g., 2023-12-25)</li>
+                            <li>Gender: must be exactly "male" or "female"</li>
+                            <li><strong>Phone: integers only, 10-14 digits</strong> (e.g., 1234567890, not +1-234-567-890)</li>
                         </ul>
                     </div>
 
@@ -118,19 +121,19 @@
                     <div class="row">
                         <!-- For Create Operations -->
                         <div class="col-md-6">
-                            <h6 class="text-primary">For Create Operations:</h6>
-                            <pre class="bg-light p-3 small"><code>name,email,phone,gender,course,grade
-John Doe,john@example.com,+1234567890,male,Computer Science,A
-Jane Smith,jane@example.com,+0987654321,female,Mathematics,B+
-Mike Johnson,mike@example.com,+1122334455,male,Physics,A-</code></pre>
+                            <h6 class="text-primary">For Create Operations (All Fields Required):</h6>
+                            <pre class="bg-light p-3 small"><code>name,email,phone,gender,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+John Doe,john@example.com,1234567890,male,1995-01-15,Computer Science,2020-09-01,A,/images/john.jpg,123 Main St
+Jane Smith,jane@example.com,9876543210,female,1996-03-22,Mathematics,2020-09-01,B+,/images/jane.jpg,456 Oak Ave
+Mike Johnson,mike@example.com,1122334455,male,1995-07-10,Physics,2020-09-01,A-,/images/mike.jpg,789 Pine Rd</code></pre>
                         </div>
 
                         <!-- For Update/Delete Operations -->
                         <div class="col-md-6">
                             <h6 class="text-warning">For Update/Delete Operations:</h6>
                             <pre class="bg-light p-3 small"><code>student_id,name,email,phone,gender,course,grade
-60f1b2c3d4e5f6789a0b1c2d,John Doe Updated,john.new@example.com,+1234567890,male,Computer Science,A+
-60f1b2c3d4e5f6789a0b1c2e,Jane Smith Updated,jane.new@example.com,+0987654321,female,Mathematics,A</code></pre>
+60f1b2c3d4e5f6789a0b1c2d,John Doe Updated,john.new@example.com,1234567890,male,Computer Science,A+
+60f1b2c3d4e5f6789a0b1c2e,Jane Smith Updated,jane.new@example.com,9876543210,female,Mathematics,A</code></pre>
                         </div>
                     </div>
 
@@ -146,7 +149,7 @@ Mike Johnson,mike@example.com,+1122334455,male,Physics,A-</code></pre>
                             </div>
                             <div class="col-md-4">
                                 <ul class="list-unstyled small">
-                                    <li><code>phone</code> - Phone number</li>
+                                    <li><code>phone</code> - Phone number (integers only)</li>
                                     <li><code>gender</code> - male or female *</li>
                                     <li><code>address</code> - Full address</li>
                                     <li><code>date_of_birth</code> - YYYY-MM-DD</li>

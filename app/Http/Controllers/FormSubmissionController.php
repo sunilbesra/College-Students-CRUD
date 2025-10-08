@@ -4,6 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\FormSubmission;
 use App\Services\FormSubmissionValidator;
+use App\Events\FormSubmissionCreated;
+use App\Events\CsvUploadStarted;
+use App\Events\CsvUploadCompleted;
+use App\Events\DuplicateEmailDetected;
 use Illuminate\Http\Request;
 use App\Jobs\ProcessFormSubmissionData;
 use Illuminate\Support\Facades\Log;
@@ -102,13 +106,13 @@ class FormSubmissionController extends Controller
     public function store(Request $request)
     {
         // Basic validation
-        $request->validate([
-            'operation' => 'required|in:create,update,delete',
-            'student_id' => 'nullable|string',
-            'data' => 'required|array',
-            'source' => 'required|in:form,api,csv',
-            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
-        ]);
+        // $request->validate([
+        //     'operation' => 'required|in:create,update,delete',
+        //     'student_id' => 'nullable|string',
+        //     'data' => 'required|array',
+        //     'source' => 'required|in:form,api,csv',
+        //     'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+        // ]);
 
         // Handle profile image upload
         $profileImagePath = null;
@@ -122,15 +126,54 @@ class FormSubmissionController extends Controller
             $formData['profile_image_path'] = $profileImagePath;
         }
 
-        // Validate form data including duplicate email check
+        // Immediate validation including duplicate email check for instant feedback
         try {
             $validatedData = FormSubmissionValidator::validate($formData, $request->student_id);
         } catch (ValidationException $e) {
+            // Fire duplicate email detected event if it's an email duplicate error
+            if (isset($e->errors()['email'])) {
+                Log::warning('🔄 FIRING EVENT: DuplicateEmailDetected (immediate validation)', [
+                    'controller' => 'FormSubmissionController',
+                    'email' => $formData['email'] ?? 'unknown',
+                    'source' => $request->source,
+                    'validation_errors' => $e->errors()
+                ]);
+                event(new DuplicateEmailDetected(
+                    $formData['email'] ?? 'unknown',
+                    $request->source,
+                    null,
+                    $formData
+                ));
+                Log::debug('✅ DuplicateEmailDetected event fired from immediate validation');
+            }
+            
             return redirect()->back()
                 ->withErrors($e->errors())
                 ->withInput()
                 ->with('error', 'Please correct the validation errors and try again.');
         }
+
+        // Create initial FormSubmission record
+        $formSubmission = FormSubmission::create([
+            'operation' => $request->operation,
+            'student_id' => $request->student_id,
+            'data' => $validatedData,
+            'source' => $request->source,
+            'status' => 'queued',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent()
+        ]);
+
+        // Fire FormSubmissionCreated event
+        Log::info('🎯 FIRING EVENT: FormSubmissionCreated', [
+            'controller' => 'FormSubmissionController',
+            'submission_id' => $formSubmission->_id,
+            'operation' => $request->operation,
+            'source' => $request->source,
+            'email' => $validatedData['email'] ?? 'N/A'
+        ]);
+        event(new FormSubmissionCreated($formSubmission, $validatedData, $request->source));
+        Log::debug('✅ FormSubmissionCreated event fired successfully');
 
         // Prepare data for direct Beanstalk processing
         $submissionData = [
@@ -140,14 +183,16 @@ class FormSubmissionController extends Controller
             'source' => $request->source,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
-            'submitted_at' => now()->toDateTimeString()
+            'submitted_at' => now()->toDateTimeString(),
+            'submission_id' => $formSubmission->_id
         ];
 
         // Send directly to Beanstalk for processing (unified architecture)
-        ProcessFormSubmissionData::dispatch(null, $submissionData)
+        ProcessFormSubmissionData::dispatch($formSubmission->_id, $submissionData)
             ->onQueue(env('BEANSTALKD_FORM_SUBMISSION_QUEUE', 'form_submission_jobs'));
 
         Log::info('Form submission sent to Beanstalk for processing', [
+            'submission_id' => $formSubmission->_id,
             'operation' => $request->operation,
             'source' => $request->source,
             'queue' => env('BEANSTALKD_FORM_SUBMISSION_QUEUE', 'form_submission_jobs')
@@ -179,19 +224,81 @@ class FormSubmissionController extends Controller
     public function update(Request $request, FormSubmission $formSubmission)
     {
         // Basic validation
-        $request->validate([
-            'operation' => 'required|in:create,update,delete',
-            'student_id' => 'nullable|string',
-            'data' => 'required|array',
-            'source' => 'required|in:form,api,csv',
-            'status' => 'required|in:queued,processing,completed,failed'
-        ]);
+        // $request->validate([
+        //     'operation' => 'required|in:create,update,delete',
+        //     'student_id' => 'nullable|string',
+        //     'data' => 'required|array',
+        //     'source' => 'required|in:form,api,csv',
+        //     'status' => 'required|in:queued,processing,completed,failed',
+        //     'profile_image' => 'nullable|image|mimes:jpeg,jpg,png,gif|max:2048', // 2MB max
+        //     'remove_current_image' => 'nullable|boolean'
+        // ]);
+
+        // Handle profile image upload
+        $data = $request->data;
+        
+        // Handle image removal
+        if ($request->has('remove_current_image') && $request->remove_current_image) {
+            // Remove the current image file if it exists
+            if (isset($formSubmission->data['profile_image_path']) && $formSubmission->data['profile_image_path']) {
+                $oldImagePath = public_path($formSubmission->data['profile_image_path']);
+                if (file_exists($oldImagePath)) {
+                    unlink($oldImagePath);
+                    Log::info('Profile image removed', [
+                        'submission_id' => $formSubmission->_id,
+                        'removed_path' => $formSubmission->data['profile_image_path']
+                    ]);
+                }
+            }
+            // Remove from data array
+            unset($data['profile_image_path']);
+        }
+        
+        // Handle new image upload
+        if ($request->hasFile('profile_image')) {
+            // Remove old image if exists
+            if (isset($formSubmission->data['profile_image_path']) && $formSubmission->data['profile_image_path']) {
+                $oldImagePath = public_path($formSubmission->data['profile_image_path']);
+                if (file_exists($oldImagePath)) {
+                    unlink($oldImagePath);
+                }
+            }
+            
+            // Store new image
+            $image = $request->file('profile_image');
+            
+            // Get file info before moving (to avoid the temp file issue)
+            $originalName = $image->getClientOriginalName();
+            $fileSize = $image->getSize();
+            
+            $imageName = time() . '_' . $originalName;
+            $imagePath = 'uploads/profile-images/' . $imageName;
+            
+            // Create directory if it doesn't exist
+            $uploadDir = public_path('uploads/profile-images');
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            // Move the uploaded file
+            $image->move($uploadDir, $imageName);
+            
+            // Update data array with new image path
+            $data['profile_image_path'] = $imagePath;
+            
+            Log::info('Profile image uploaded', [
+                'submission_id' => $formSubmission->_id,
+                'new_path' => $imagePath,
+                'original_name' => $originalName,
+                'size' => $fileSize
+            ]);
+        }
 
         // Prepare updated data
         $submissionData = [
             'operation' => $request->operation,
             'student_id' => $request->student_id,
-            'data' => $request->data,
+            'data' => $data,
             'source' => $request->source,
             'status' => $request->status,
             'error_message' => $request->error_message
@@ -213,8 +320,15 @@ class FormSubmissionController extends Controller
             ]);
         }
 
+        $successMessage = 'Form submission updated successfully!';
+        if ($request->hasFile('profile_image')) {
+            $successMessage .= ' Profile image has been uploaded.';
+        } elseif ($request->has('remove_current_image') && $request->remove_current_image) {
+            $successMessage .= ' Profile image has been removed.';
+        }
+
         return redirect()->route('form_submissions.index')
-            ->with('success', 'Form submission updated successfully!');
+            ->with('success', $successMessage);
     }
 
     /**
@@ -287,6 +401,9 @@ class FormSubmissionController extends Controller
             'file_path' => $fullPath
         ]);
 
+        // Start timing for performance tracking
+        $startTime = microtime(true);
+
         // Read all CSV data first
         $csvData = [];
         while (($row = fgetcsv($handle)) !== false) {
@@ -313,6 +430,23 @@ class FormSubmissionController extends Controller
             $csvData[] = $rowData;
         }
 
+        // Fire CSV upload started event
+        Log::info('📤 FIRING EVENT: CsvUploadStarted', [
+            'controller' => 'FormSubmissionController',
+            'file_name' => $file->getClientOriginalName(),
+            'operation' => $operation,
+            'total_rows' => count($csvData),
+            'ip_address' => $request->ip()
+        ]);
+        event(new CsvUploadStarted(
+            $file->getClientOriginalName(),
+            $operation,
+            count($csvData),
+            $request->ip(),
+            $request->userAgent()
+        ));
+        Log::debug('✅ CsvUploadStarted event fired successfully');
+
         // Use FormSubmissionValidator for batch validation
         $validationResults = FormSubmissionValidator::validateCsvBatch($csvData);
         $summary = FormSubmissionValidator::getCsvValidationSummary($validationResults);
@@ -337,10 +471,27 @@ class FormSubmissionController extends Controller
             $errors[] = "Row {$invalidRow['row']}: " . implode(' | ', $errorMessages);
         }
 
-        // Collect duplicate errors
+        // Collect duplicate errors and fire events
         foreach ($validationResults['duplicates'] as $duplicate) {
             $errors[] = "Row {$duplicate['row']}: {$duplicate['error']}";
             $duplicateEmails[] = $duplicate['email'];
+            
+            // Fire duplicate email detected event
+            Log::warning('🔄 FIRING EVENT: DuplicateEmailDetected (from CSV)', [
+                'controller' => 'FormSubmissionController',
+                'email' => $duplicate['email'],
+                'source' => 'csv',
+                'row' => $duplicate['row'],
+                'error' => $duplicate['error']
+            ]);
+            event(new DuplicateEmailDetected(
+                $duplicate['email'],
+                'csv',
+                null,
+                null,
+                $duplicate['row']
+            ));
+            Log::debug('✅ DuplicateEmailDetected event fired from CSV processing');
         }
 
         $processedCount = count($validRows);
@@ -408,6 +559,27 @@ class FormSubmissionController extends Controller
             $message = "No valid data found in CSV file.";
             $alertType = 'error';
         }
+
+        // Calculate processing time
+        $processingTime = (microtime(true) - $startTime) * 1000; // Convert to milliseconds
+        
+        // Fire CSV upload completed event
+        Log::info('📥 FIRING EVENT: CsvUploadCompleted', [
+            'controller' => 'FormSubmissionController',
+            'file_name' => $file->getClientOriginalName(),
+            'operation' => $operation,
+            'processing_time_ms' => (int) $processingTime,
+            'validation_summary' => $summary,
+            'batch_job_id' => $processedCount > 0 ? 'batch_job_dispatched' : null
+        ]);
+        event(new CsvUploadCompleted(
+            $file->getClientOriginalName(),
+            $operation,
+            $summary,
+            (int) $processingTime,
+            $processedCount > 0 ? 'batch_job_dispatched' : null
+        ));
+        Log::debug('✅ CsvUploadCompleted event fired successfully');
 
         // Store detailed errors in session for display
         if (!empty($errors)) {

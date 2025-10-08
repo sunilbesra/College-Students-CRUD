@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\FormSubmission;
 use App\Services\FormSubmissionValidator;
+use App\Events\FormSubmissionProcessed;
+use App\Events\DuplicateEmailDetected;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -87,7 +89,8 @@ class ProcessFormSubmissionData implements ShouldQueue
             $formSubmission->update(['status' => 'processing']);
             
             // Step 2: Validate the data using FormSubmissionValidator
-            $validatedData = $this->validateSubmissionData($formSubmission->data);
+            // Pass current submission ID to exclude it from duplicate check
+            $validatedData = $this->validateSubmissionData($formSubmission->data, $formSubmission->_id);
 
             // Step 3: Process the validated data (store in FormSubmission only)
             $result = $this->processFormSubmission($formSubmission, $validatedData);
@@ -99,6 +102,17 @@ class ProcessFormSubmissionData implements ShouldQueue
                 'processed_at' => now(),
                 'error_message' => null
             ]);
+
+            // Fire FormSubmissionProcessed event
+            Log::info(' FIRING EVENT: FormSubmissionProcessed (completed)', [
+                'job' => 'ProcessFormSubmissionData',
+                'submission_id' => $formSubmission->_id,
+                'operation' => $formSubmission->operation,
+                'source' => $formSubmission->source,
+                'status' => 'completed'
+            ]);
+            event(new FormSubmissionProcessed($formSubmission, 'completed'));
+            Log::debug(' FormSubmissionProcessed (completed) event fired successfully');
 
             Log::info('Form submission validation and processing completed successfully', [
                 'submission_id' => $formSubmission->_id,
@@ -114,10 +128,48 @@ class ProcessFormSubmissionData implements ShouldQueue
             ));
 
             if ($formSubmission) {
+                // Check if this is a duplicate email validation error
+                if (isset($e->errors()['email'])) {
+                    $emailErrors = $e->errors()['email'];
+                    foreach ($emailErrors as $emailError) {
+                        if (str_contains(strtolower($emailError), 'already registered') || 
+                            str_contains(strtolower($emailError), 'duplicate')) {
+                            
+                            // Fire duplicate email detected event
+                            Log::warning('🔄 FIRING EVENT: DuplicateEmailDetected (from Beanstalk job)', [
+                                'job' => 'ProcessFormSubmissionData',
+                                'submission_id' => $formSubmission->_id,
+                                'email' => $formSubmission->data['email'] ?? 'unknown',
+                                'source' => $formSubmission->source,
+                                'validation_error' => $emailError
+                            ]);
+                            event(new DuplicateEmailDetected(
+                                $formSubmission->data['email'] ?? 'unknown',
+                                $formSubmission->source,
+                                $formSubmission->_id,
+                                $formSubmission->data
+                            ));
+                            Log::debug('✅ DuplicateEmailDetected event fired from Beanstalk job');
+                            break;
+                        }
+                    }
+                }
+
                 $formSubmission->update([
                     'status' => 'failed',
                     'error_message' => $errorMessage
                 ]);
+                
+                // Fire FormSubmissionProcessed event for validation failure
+                Log::warning(' FIRING EVENT: FormSubmissionProcessed (validation failed)', [
+                    'job' => 'ProcessFormSubmissionData',
+                    'submission_id' => $formSubmission->_id,
+                    'status' => 'failed',
+                    'error_type' => 'validation',
+                    'error_message' => substr($errorMessage, 0, 100)
+                ]);
+                event(new FormSubmissionProcessed($formSubmission, 'failed', $errorMessage));
+                Log::debug(' FormSubmissionProcessed (validation failed) event fired');
             }
 
             Log::warning('Form submission validation failed in consumer', [
@@ -135,6 +187,17 @@ class ProcessFormSubmissionData implements ShouldQueue
                     'status' => 'failed',
                     'error_message' => $e->getMessage()
                 ]);
+                
+                // Fire FormSubmissionProcessed event for general failure
+                Log::error('🎯 FIRING EVENT: FormSubmissionProcessed (general failure)', [
+                    'job' => 'ProcessFormSubmissionData',
+                    'submission_id' => $formSubmission->_id,
+                    'status' => 'failed',
+                    'error_type' => 'general',
+                    'error_message' => substr($e->getMessage(), 0, 100)
+                ]);
+                event(new FormSubmissionProcessed($formSubmission, 'failed', $e->getMessage()));
+                Log::debug('✅ FormSubmissionProcessed (general failure) event fired');
             }
 
             Log::error('Form submission processing failed in consumer', [
@@ -152,10 +215,11 @@ class ProcessFormSubmissionData implements ShouldQueue
     /**
      * Validate submission data using FormSubmissionValidator
      */
-    private function validateSubmissionData(array $data): array
+    private function validateSubmissionData(array $data, $ignoreId = null): array
     {
         // Use FormSubmissionValidator to validate form submission data
-        return FormSubmissionValidator::validate($data);
+        // Pass ignoreId to exclude current submission from duplicate check
+        return FormSubmissionValidator::validate($data, $ignoreId);
     }
 
     /**
@@ -236,7 +300,7 @@ class ProcessFormSubmissionData implements ShouldQueue
      */
     private function handleUpdateOperation(FormSubmission $formSubmission, array $validatedData): array
     {
-        $targetSubmissionId = $formSubmission->student_id; // Using student_id field to reference target submission
+        $targetSubmissionId = $formSubmission->student_id; // Using student_id field to reference target submission 
         $email = $validatedData['email'] ?? null;
         
         $targetSubmission = null;
@@ -398,7 +462,8 @@ class ProcessFormSubmissionData implements ShouldQueue
                 ]);
 
                 // Validate the data
-                $validatedData = $this->validateSubmissionData($rowData['data']);
+                // Pass current submission ID to exclude it from duplicate check
+                $validatedData = $this->validateSubmissionData($rowData['data'], $formSubmission->_id);
 
                 // Process the form submission
                 $result = $this->processFormSubmission($formSubmission, $validatedData);
@@ -410,6 +475,17 @@ class ProcessFormSubmissionData implements ShouldQueue
                     'processed_at' => now(),
                     'error_message' => null
                 ]);
+                
+                // Fire FormSubmissionProcessed event for batch row
+                Log::debug('🎯 FIRING EVENT: FormSubmissionProcessed (batch completed)', [
+                    'job' => 'ProcessFormSubmissionData',
+                    'submission_id' => $formSubmission->_id,
+                    'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
+                    'batch_processing' => true,
+                    'status' => 'completed'
+                ]);
+                event(new FormSubmissionProcessed($formSubmission, 'completed'));
+                Log::debug('✅ FormSubmissionProcessed (batch) event fired successfully');
 
                 $successCount++;
 
@@ -419,6 +495,55 @@ class ProcessFormSubmissionData implements ShouldQueue
                     'email' => $validatedData['email'] ?? 'N/A'
                 ]);
 
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                $errorCount++;
+                
+                // Check if this is a duplicate email validation error in batch processing
+                if (isset($e->errors()['email']) && isset($formSubmission)) {
+                    $emailErrors = $e->errors()['email'];
+                    foreach ($emailErrors as $emailError) {
+                        if (str_contains(strtolower($emailError), 'already registered') || 
+                            str_contains(strtolower($emailError), 'duplicate')) {
+                            
+                            // Fire duplicate email detected event for CSV row
+                            Log::warning('🔄 FIRING EVENT: DuplicateEmailDetected (from CSV batch processing)', [
+                                'job' => 'ProcessFormSubmissionData',
+                                'submission_id' => $formSubmission->_id ?? 'unknown',
+                                'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
+                                'email' => $rowData['data']['email'] ?? 'unknown',
+                                'source' => $rowData['source'] ?? 'csv',
+                                'validation_error' => $emailError
+                            ]);
+                            event(new DuplicateEmailDetected(
+                                $rowData['data']['email'] ?? 'unknown',
+                                $rowData['source'] ?? 'csv',
+                                $formSubmission->_id ?? null,
+                                $rowData['data'] ?? [],
+                                $rowData['csv_row'] ?? $rowIndex + 1
+                            ));
+                            Log::debug('✅ DuplicateEmailDetected event fired from CSV batch processing');
+                            break;
+                        }
+                    }
+                    
+                    // Update submission status to failed
+                    if (isset($formSubmission)) {
+                        $formSubmission->update([
+                            'status' => 'failed',
+                            'error_message' => 'Validation failed: ' . implode('; ', array_map(
+                                fn($errors) => is_array($errors) ? implode(', ', $errors) : $errors, 
+                                $e->errors()
+                            ))
+                        ]);
+                    }
+                }
+                
+                Log::error('Batch row validation failed', [
+                    'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
+                    'validation_errors' => $e->errors(),
+                    'data' => $rowData['data'] ?? []
+                ]);
+                
             } catch (\Throwable $e) {
                 $errorCount++;
                 Log::error('Batch row processing failed', [

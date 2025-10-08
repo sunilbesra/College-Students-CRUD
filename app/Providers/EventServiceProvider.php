@@ -31,6 +31,27 @@ class EventServiceProvider extends ServiceProvider
         \App\Events\CsvBatchQueued::class => [
             \App\Listeners\DispatchCsvJobsListener::class,
         ],
+        
+        // Form Submission Events
+        \App\Events\FormSubmissionCreated::class => [
+            \App\Listeners\LogFormSubmissionCreated::class,
+        ],
+        \App\Events\FormSubmissionProcessed::class => [
+            \App\Listeners\UpdateFormSubmissionStats::class,
+        ],
+        
+        // CSV Upload Events
+        \App\Events\CsvUploadStarted::class => [
+            \App\Listeners\LogCsvUploadStarted::class,
+        ],
+        \App\Events\CsvUploadCompleted::class => [
+            \App\Listeners\LogCsvUploadCompleted::class,
+        ],
+        
+        // Duplicate Email Events
+        \App\Events\DuplicateEmailDetected::class => [
+            \App\Listeners\HandleDuplicateEmail::class,
+        ],
     ];
 
     /**
