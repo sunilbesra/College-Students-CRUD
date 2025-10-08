@@ -1,0 +1,2 @@
+name,email,phone,gender,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+Debug Test,debug_test@example.com,7777777777,male,2000-01-01,Testing,2024-01-01,A,/images/default.jpg,Debug Street 123

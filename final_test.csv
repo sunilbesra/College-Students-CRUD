@@ -1,0 +1,2 @@
+name,email,phone,gender,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+Final Test,final_test@example.com,7777777777,male,2000-07-25,Final Course,2023-03-20,A+,/images/default.jpg,777 Final Test Boulevard

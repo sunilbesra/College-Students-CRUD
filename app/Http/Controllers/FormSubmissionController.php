@@ -234,6 +234,9 @@ class FormSubmissionController extends Controller
         //     'remove_current_image' => 'nullable|boolean'
         // ]);
 
+        // Store original data for comparison
+        $originalData = $formSubmission->data;
+
         // Handle profile image upload
         $data = $request->data;
         
@@ -307,6 +310,22 @@ class FormSubmissionController extends Controller
         // Update form submission record
         $formSubmission->update($submissionData);
 
+        // Fire FormSubmissionUpdated event
+        Log::info('🔄 FIRING EVENT: FormSubmissionUpdated', [
+            'controller' => 'FormSubmissionController',
+            'submission_id' => $formSubmission->_id,
+            'operation' => $request->operation,
+            'source' => $request->source,
+            'email' => $data['email'] ?? 'N/A'
+        ]);
+        event(new \App\Events\FormSubmissionUpdated(
+            $formSubmission,
+            $originalData,
+            $data,
+            $request->source
+        ));
+        Log::debug('✅ FormSubmissionUpdated event fired successfully');
+
         // If status changed to queued, reprocess
         if ($request->status === 'queued') {
             ProcessFormSubmissionData::dispatch($formSubmission->_id, $submissionData);
@@ -337,13 +356,34 @@ class FormSubmissionController extends Controller
     public function destroy(FormSubmission $formSubmission)
     {
         $submissionId = $formSubmission->_id;
+        $submissionData = $formSubmission->data;
+        $operation = $formSubmission->operation;
+        $studentId = $formSubmission->student_id;
+        $source = $formSubmission->source ?? 'form';
         
         // Mirror deletion to Beanstalk
         $this->mirrorToBeanstalk('form_submission_deleted', [
             'id' => $submissionId,
-            'operation' => $formSubmission->operation,
-            'student_id' => $formSubmission->student_id
+            'operation' => $operation,
+            'student_id' => $studentId
         ], $submissionId);
+
+        // Fire FormSubmissionDeleted event before deletion
+        Log::info('🗑️ FIRING EVENT: FormSubmissionDeleted', [
+            'controller' => 'FormSubmissionController',
+            'submission_id' => $submissionId,
+            'operation' => $operation,
+            'source' => $source,
+            'email' => $submissionData['email'] ?? 'N/A'
+        ]);
+        event(new \App\Events\FormSubmissionDeleted(
+            $submissionId,
+            $submissionData,
+            $operation,
+            $studentId,
+            $source
+        ));
+        Log::debug('✅ FormSubmissionDeleted event fired successfully');
 
         $formSubmission->delete();
 
@@ -650,6 +690,20 @@ class FormSubmissionController extends Controller
         ];
 
         return response()->json($stats);
+    }
+
+    /**
+     * Get latest submission ID for polling
+     */
+    public function getLatest()
+    {
+        $latest = FormSubmission::orderBy('created_at', 'desc')->first();
+        
+        return response()->json([
+            'latest_id' => $latest ? substr($latest->_id, -8) : null,
+            'total_count' => FormSubmission::count(),
+            'timestamp' => now()->toISOString()
+        ]);
     }
 
     /**

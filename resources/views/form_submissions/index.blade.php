@@ -8,8 +8,22 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4 class="mb-0">Form Submissions</h4>
+                    <div class="d-flex align-items-center">
+                        <h4 class="mb-0 me-3">Form Submissions</h4>
+                    </div>
                     <div class="btn-group">
+                        <!-- Refresh controls -->
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="manualRefresh()" id="manual-refresh-btn" title="Manual Refresh">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" onclick="pausePolling()" id="pause-polling-btn" title="Pause Auto-refresh">
+                            <i class="fas fa-pause"></i> Pause
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm" onclick="resumePolling()" id="resume-polling-btn" style="display: none;" title="Resume Auto-refresh">
+                            <i class="fas fa-play"></i> Resume
+                        </button>
+                        
+                        <!-- Original buttons -->
                         <a href="{{ route('form_submissions.create') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> New Submission
                         </a>
@@ -449,6 +463,340 @@ function handleImageError(img) {
     img.src = '{{ asset("images/default-avatar.svg") }}';
     img.onerror = null; // Prevent infinite loop
     img.title = 'Default avatar - Image not found';
+}
+
+// Simple and reliable auto-refresh system
+let currentCount = 0;
+let isAutoRefreshOn = true;
+let refreshInterval = null;
+
+console.log('🔄 Auto-refresh system loading...');
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ Auto-refresh system starting...');
+    
+    // Get initial count
+    getCurrentCount();
+    
+    // Start auto-refresh
+    startAutoRefresh();
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', stopAutoRefresh);
+});
+
+function getCurrentCount() {
+    fetch('{{ route("form_submissions.latest") }}')
+        .then(response => response.json())
+        .then(data => {
+            currentCount = data.total_count;
+            console.log('📊 Current total count:', currentCount);
+        })
+        .catch(error => console.log('Count check failed:', error));
+}
+
+function startAutoRefresh() {
+    if (refreshInterval) return;
+    
+    isAutoRefreshOn = true;
+    console.log('✅ Auto-refresh started');
+    
+    // Check every 1 second for new data
+    refreshInterval = setInterval(checkForNewData, 100);
+}
+
+function stopAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    isAutoRefreshOn = false;
+    console.log('⏹️ Auto-refresh stopped');
+}
+
+function checkForNewData() {
+    fetch('{{ route("form_submissions.latest") }}')
+        .then(response => response.json())
+        .then(data => {
+            const newCount = data.total_count;
+            
+            if (newCount > currentCount) {
+                console.log('🆕 New data detected! Old count:', currentCount, 'New count:', newCount);
+                currentCount = newCount;
+                
+                // Show notification and refresh
+                showUpdateNotification();
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500); // Small delay to show the notification
+            }
+        })
+        .catch(error => {
+            console.log('Check failed (normal):', error);
+        });
+}
+
+function showUpdateNotification() {
+    // Remove any existing notification
+    const existing = document.getElementById('update-notification');
+    if (existing) existing.remove();
+    
+    // Create notification
+    const notification = document.createElement('div');
+    notification.id = 'update-notification';
+    notification.className = 'alert alert-success alert-dismissible fade show position-fixed';
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 350px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);';
+    notification.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas fa-check-circle me-2"></i>
+            <div>
+                <strong>New CSV Data Detected!</strong><br>
+                <small>Refreshing page automatically...</small>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
+}
+
+// Manual controls
+function manualRefresh() {
+    console.log('🔄 Manual refresh triggered');
+    const btn = document.getElementById('manual-refresh-btn');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+        btn.disabled = true;
+    }
+    
+    showUpdateNotification();
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
+}
+
+function pauseAutoRefresh() {
+    stopAutoRefresh();
+    document.getElementById('pause-polling-btn').style.display = 'none';
+    document.getElementById('resume-polling-btn').style.display = 'inline-block';
+    console.log('⏸️ Auto-refresh paused by user');
+}
+
+function resumeAutoRefresh() {
+    startAutoRefresh();
+    document.getElementById('resume-polling-btn').style.display = 'none';
+    document.getElementById('pause-polling-btn').style.display = 'inline-block';
+    console.log('▶️ Auto-refresh resumed by user');
+}
+
+console.log('📝 Auto-refresh system loaded. Open browser console to see activity.');
+
+// Alias functions to match button onclick handlers
+function pausePolling() {
+    pauseAutoRefresh();
+}
+
+function resumePolling() {
+    resumeAutoRefresh();
+}
+
+async function checkForNewSubmissions() {
+    try {
+        // Use the efficient API endpoint
+        const apiUrl = '{{ route("form_submissions.latest") }}';
+        
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+            console.log('API response not OK:', response.status);
+            return;
+        }
+        
+        const data = await response.json();
+        const currentCount = data.total_count || 0;
+        
+        console.log('Checking submissions - Current:', currentCount, 'Last:', lastSubmissionCount);
+        
+        // If count increased, we have new submissions
+        if (currentCount > lastSubmissionCount) {
+            console.log('New submissions detected! Refreshing table...');
+            
+            try {
+                await refreshTable();
+                showNewDataNotification();
+            } catch (error) {
+                console.log('AJAX refresh failed, falling back to page reload:', error);
+                showNewDataNotification();
+                // Fallback: reload page after showing notification
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            }
+            
+            lastSubmissionCount = currentCount;
+        }
+    } catch (error) {
+        console.log('Polling error:', error.message);
+    }
+}
+
+async function refreshTable() {
+    try {
+        console.log('Refreshing table...');
+        
+        // Show loading indicator
+        showLoadingOverlay();
+        
+        // Get current URL to maintain filters and pagination
+        const currentUrl = window.location.href;
+        console.log('Fetching data from:', currentUrl);
+        
+        const response = await fetch(currentUrl);
+        
+        if (!response.ok) {
+            console.log('Failed to fetch page:', response.status);
+            hideLoadingOverlay();
+            return;
+        }
+        
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // Update the table content
+        const newTableContainer = doc.querySelector('.table-responsive');
+        const currentTableContainer = document.querySelector('.table-responsive');
+        
+        if (newTableContainer && currentTableContainer) {
+            console.log('Updating table content...');
+            currentTableContainer.innerHTML = newTableContainer.innerHTML;
+        } else {
+            console.log('Table containers not found');
+        }
+        
+        // Update pagination
+        const newPagination = doc.querySelector('.d-flex.justify-content-center');
+        const currentPagination = document.querySelector('.d-flex.justify-content-center');
+        
+        if (newPagination && currentPagination) {
+            currentPagination.innerHTML = newPagination.innerHTML;
+        }
+        
+        // Update results summary
+        const newSummary = doc.querySelector('.mb-3 small.text-muted');
+        const currentSummary = document.querySelector('.mb-3 small.text-muted');
+        
+        if (newSummary && currentSummary) {
+            currentSummary.innerHTML = newSummary.innerHTML;
+        }
+        
+        // Hide loading indicator
+        hideLoadingOverlay();
+        console.log('Table refresh completed');
+        
+    } catch (error) {
+        console.error('Error refreshing table:', error);
+        hideLoadingOverlay();
+    }
+}
+
+function showLoadingOverlay() {
+    // Remove existing overlay if any
+    const existingOverlay = document.getElementById('loading-overlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
+    
+    // Create loading overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    `;
+    
+    overlay.innerHTML = `
+        <div class="text-center text-white">
+            <div class="spinner-border text-light mb-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div>Refreshing table data...</div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
+function showNewDataNotification() {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-info alert-dismissible fade show position-fixed';
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 350px;';
+    notification.innerHTML = `
+        <i class="fas fa-sync-alt"></i> <strong>Table Updated!</strong> New CSV data has been loaded automatically.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// Manual refresh button functionality
+function manualRefresh() {
+    const refreshBtn = document.getElementById('manual-refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+        refreshBtn.disabled = true;
+    }
+    
+    refreshTable().then(() => {
+        if (refreshBtn) {
+            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+            refreshBtn.disabled = false;
+        }
+        showNewDataNotification();
+    });
+}
+
+// Pause/Resume polling functions
+function pausePolling() {
+    stopPolling();
+    document.getElementById('pause-polling-btn').style.display = 'none';
+    document.getElementById('resume-polling-btn').style.display = 'inline-block';
+}
+
+function resumePolling() {
+    startPolling();
+    document.getElementById('resume-polling-btn').style.display = 'none';
+    document.getElementById('pause-polling-btn').style.display = 'inline-block';
 }
 </script>
 @endsection

@@ -1,0 +1,4 @@
+name,email,phone,gender,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+Test Student CSV 1,test_csv_1@example.com,1234567890,male,1995-01-15,Computer Science,2020-09-01,A,/images/default-avatar.jpg,123 CSV Test Street
+Test Student CSV 2,test_csv_2@example.com,9876543210,female,1996-03-22,Mathematics,2020-09-01,B+,/images/default-avatar.jpg,456 CSV Test Avenue
+Test Student CSV 3,test_csv_3@example.com,1122334455,male,1995-07-10,Physics,2020-09-01,A-,/images/default-avatar.jpg,789 CSV Test Road

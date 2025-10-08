@@ -35,22 +35,33 @@ class EventServiceProvider extends ServiceProvider
         // Form Submission Events
         \App\Events\FormSubmissionCreated::class => [
             \App\Listeners\LogFormSubmissionCreated::class,
+            \App\Listeners\CreateFormSubmissionNotification::class,
         ],
         \App\Events\FormSubmissionProcessed::class => [
             \App\Listeners\UpdateFormSubmissionStats::class,
+            \App\Listeners\CreateProcessedSubmissionNotification::class,
+        ],
+        \App\Events\FormSubmissionUpdated::class => [
+            \App\Listeners\CreateUpdatedSubmissionNotification::class,
+        ],
+        \App\Events\FormSubmissionDeleted::class => [
+            \App\Listeners\CreateDeletedSubmissionNotification::class,
         ],
         
         // CSV Upload Events
         \App\Events\CsvUploadStarted::class => [
             \App\Listeners\LogCsvUploadStarted::class,
+            // \App\Listeners\CreateCsvUploadStartedNotification::class,  // Commented out to show only completion notification
         ],
         \App\Events\CsvUploadCompleted::class => [
             \App\Listeners\LogCsvUploadCompleted::class,
+            \App\Listeners\CreateCsvUploadCompletedNotification::class,
         ],
         
         // Duplicate Email Events
         \App\Events\DuplicateEmailDetected::class => [
             \App\Listeners\HandleDuplicateEmail::class,
+            \App\Listeners\CreateDuplicateEmailNotification::class,
         ],
     ];
 

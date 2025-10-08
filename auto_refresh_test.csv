@@ -1,0 +1,2 @@
+name,email,phone,gender,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+Auto Refresh Test,auto_refresh_test@example.com,6666666666,female,1999-06-20,Computer Science,2023-02-15,A,/images/default.jpg,123 Auto Refresh Lane

@@ -1,0 +1,6 @@
+name,email,phone,gender,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+John CSV Demo,csv_demo_1@example.com,1234567890,male,1995-01-15,Computer Science,2020-09-01,A,/images/default-avatar.jpg,123 CSV Demo Street
+Jane CSV Demo,csv_demo_2@example.com,9876543210,female,1996-03-22,Mathematics,2020-09-01,B+,/images/default-avatar.jpg,456 CSV Demo Avenue
+Mike CSV Demo,csv_demo_3@example.com,1122334455,male,1995-07-10,Physics,2020-09-01,A-,/images/default-avatar.jpg,789 CSV Demo Road
+Sarah CSV Demo,csv_demo_4@example.com,2233445566,female,1997-12-05,Chemistry,2021-01-15,A,/images/default-avatar.jpg,321 CSV Demo Lane
+Alex CSV Demo,csv_demo_5@example.com,3344556677,male,1996-08-20,Biology,2020-08-30,B,/images/default-avatar.jpg,654 CSV Demo Circle

@@ -1,0 +1,2 @@
+name,email,phone,gender,date_of_birth,course,enrollment_date,grade,profile_image_path,address
+Single Test,single_test@example.com,5555555555,male,1998-05-15,Engineering,2022-01-10,B+,/images/default.jpg,999 Single Test Ave

@@ -5,12 +5,12 @@ namespace App\Jobs;
 use App\Models\FormSubmission;
 use App\Services\FormSubmissionValidator;
 use App\Events\FormSubmissionProcessed;
-use App\Events\DuplicateEmailDetected;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
+    use App\Events\DuplicateEmailDetected;
+    use Illuminate\Bus\Queueable;
+    use Illuminate\Contracts\Queue\ShouldQueue;
+    use Illuminate\Foundation\Bus\Dispatchable;
+    use Illuminate\Queue\InteractsWithQueue;
+    use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
 class ProcessFormSubmissionData implements ShouldQueue
@@ -26,7 +26,7 @@ class ProcessFormSubmissionData implements ShouldQueue
 
     /**
      * Create a new job instance.
-     * For unified architecture: submissionId can be null for direct Beanstalk processing
+     * For unified architecture: submissionId can be null for direct Beanstalk processing   
      */
     public function __construct(?string $submissionId, array $submissionData)
     {
