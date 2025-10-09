@@ -159,7 +159,36 @@
                         </div>
                     @endif
 
-
+                    <!-- Processing Info Alert (for new architecture) -->
+                    @if(session('processing_info'))
+                        @php $processingInfo = session('processing_info'); @endphp
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-info-circle"></i> 
+                                Processing Information
+                            </h6>
+                            <p class="mb-2">{{ $processingInfo['message'] }}</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small>
+                                        <strong>Type:</strong> {{ ucfirst($processingInfo['type']) }}<br>
+                                        @if($processingInfo['type'] === 'form_submission')
+                                            <strong>Email:</strong> <code>{{ $processingInfo['email'] }}</code>
+                                        @else
+                                            <strong>File:</strong> {{ $processingInfo['csv_file'] ?? 'N/A' }}<br>
+                                            <strong>Rows:</strong> {{ $processingInfo['total_rows'] ?? 0 }}
+                                        @endif
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small>
+                                        <strong>Mirror Job ID:</strong> {{ $processingInfo['mirror_job_id'] ?? 'N/A' }}
+                                    </small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    @endif
 
                     <!-- Real-time Duplicate Notifications Section -->
                     <div id="duplicate-notifications-section" style="display: none;">
@@ -197,10 +226,10 @@
                         <div class="alert alert-info d-flex justify-content-between align-items-start" role="alert">
                             <div class="flex-grow-1">
                                 <h6 class="alert-heading">
-                                    <i class="fas fa-exclamation-triangle"></i> 
-                                    Duplicate Email Alerts (<span id="all-notifications-count">0</span>)
+                                    <i class="fas fa-bell"></i> 
+                                    Recent System Notifications (<span id="all-notifications-count">0</span>)
                                 </h6>
-                                <p class="mb-2">Duplicate email detections and CSV upload results:</p>
+                                <p class="mb-2">Latest form submissions, CSV uploads, and duplicate detections:</p>
                                 <div id="all-notifications-list" style="max-height: 400px; overflow-y: auto;">
                                     <!-- All notifications will be populated here via JavaScript -->
                                 </div>
@@ -942,23 +971,12 @@ function checkForAllNotifications() {
 function displayAllNotifications(notifications, types) {
     const section = document.getElementById('all-notifications-section');
     
-    // Only show duplicate email notifications and CSV uploads
-    const importantNotifications = notifications.filter(n => 
-        n.type === 'duplicate_email' || 
-        n.type === 'csv_upload'
-    );
-    
-    if (importantNotifications.length === 0) {
-        section.style.display = 'none';
-        return;
-    }
-    
     // Update the count
-    document.getElementById('all-notifications-count').textContent = importantNotifications.length;
+    document.getElementById('all-notifications-count').textContent = notifications.length;
     
     // Build the list HTML with different colors for different types
     let listHtml = '';
-    importantNotifications.forEach(notification => {
+    notifications.forEach(notification => {
         const typeClass = getNotificationTypeClass(notification.type);
         const iconClass = getNotificationIcon(notification.type, notification.data);
         

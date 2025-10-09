@@ -126,24 +126,7 @@ class FormSubmissionController extends Controller
             $formData['profile_image_path'] = $profileImagePath;
         }
 
-        // Check for duplicate email to show appropriate message (still send to Beanstalk for consistent processing)
-        $isDuplicate = false;
-        $duplicateMessage = null;
-        
-        if (isset($formData['email']) && !empty($formData['email'])) {
-            $existingSubmission = \App\Models\FormSubmission::where('data.email', $formData['email'])->first();
-            
-            if ($existingSubmission) {
-                $isDuplicate = true;
-                $duplicateMessage = "Duplicate email detected: {$formData['email']} already exists in the system.";
-                
-                Log::info('Immediate duplicate detected for message display', [
-                    'email' => $formData['email'],
-                    'existing_submission_id' => $existingSubmission->_id,
-                    'source' => 'form'
-                ]);
-            }
-        }
+        // No duplicate validation in controller - let Beanstalk consumer handle all validation
 
         // Prepare data for validation and insertion job
         $submissionData = [
@@ -184,14 +167,14 @@ class FormSubmissionController extends Controller
             'job' => 'ProcessFormSubmissionData'
         ]);
 
-        // Show appropriate message based on duplicate detection
-        if ($isDuplicate) {
-            return redirect()->route('form_submissions.index')
-                ->with('warning', $duplicateMessage);
-        } else {
-            return redirect()->route('form_submissions.index')
-                ->with('success', "Form submission received for {$formData['email']}. Processing in background...");
-        }
+        return redirect()->route('form_submissions.index')
+            ->with('success', 'Form submission stored in Beanstalk for validation and processing.')
+            ->with('processing_info', [
+                'type' => 'form_submission',
+                'email' => $formData['email'] ?? 'N/A',
+                'mirror_job_id' => $mirrorJobId,
+                'message' => 'Your submission is being validated. Duplicate validation happens in the consumer.'
+            ]);
     }
 
     /**
