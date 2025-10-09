@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use MongoDB\Laravel\Eloquent\Model;
+use App\Services\FormSubmissionValidator;
+use App\Events\DuplicateEmailDetected;
+use Illuminate\Support\Facades\Log;
 
 class FormSubmission extends Model
 {
@@ -70,4 +73,6 @@ class FormSubmission extends Model
     {
         return $query->where('operation', $operation);
     }
+
+
 }

@@ -52,12 +52,121 @@
                         </div>
                     @endif
 
+                    @if(session('duplicate_details'))
+                        @php $duplicates = session('duplicate_details'); @endphp
+                        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                CSV Upload: {{ $duplicates['count'] }} Duplicate Email(s) Detected
+                            </h6>
+                            <p class="mb-2">
+                                The following email addresses already exist and were prevented from being inserted:
+                            </p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ul class="mb-2">
+                                        @foreach(array_slice($duplicates['emails'], 0, ceil(count($duplicates['emails'])/2)) as $duplicate)
+                                            <li>
+                                                <code>{{ $duplicate['email'] }}</code> 
+                                                <small class="text-muted">(Row {{ $duplicate['row'] }}, ID: {{ $duplicate['existing_id'] }})</small>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                                @if(count($duplicates['emails']) > 1)
+                                    <div class="col-md-6">
+                                        <ul class="mb-2">
+                                            @foreach(array_slice($duplicates['emails'], ceil(count($duplicates['emails'])/2)) as $duplicate)
+                                                <li>
+                                                    <code>{{ $duplicate['email'] }}</code> 
+                                                    <small class="text-muted">(Row {{ $duplicate['row'] }}, ID: {{ $duplicate['existing_id'] }})</small>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                            </div>
+                            @if($duplicates['count'] > $duplicates['total_shown'])
+                                <p class="text-muted mb-2">
+                                    <em>... and {{ $duplicates['count'] - $duplicates['total_shown'] }} more duplicates not shown</em>
+                                </p>
+                            @endif
+                            <p class="mb-0">
+                                <small>
+                                    <strong><i class="fas fa-shield-alt"></i> Data Protection:</strong> 
+                                    These duplicate emails were blocked at the frontend level to prevent duplicate records in the database.
+                                </small>
+                            </p>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    @endif
+
                     @if(session('error'))
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
                             <i class="fas fa-times-circle"></i> {{ session('error') }}
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                     @endif
+
+                    <!-- Processing Info Alert (for new architecture) -->
+                    @if(session('processing_info'))
+                        @php $processingInfo = session('processing_info'); @endphp
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-info-circle"></i> 
+                                Processing Information
+                            </h6>
+                            <p class="mb-2">{{ $processingInfo['message'] }}</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small>
+                                        <strong>Type:</strong> {{ ucfirst($processingInfo['type']) }}<br>
+                                        @if($processingInfo['type'] === 'form_submission')
+                                            <strong>Email:</strong> <code>{{ $processingInfo['email'] }}</code>
+                                        @else
+                                            <strong>File:</strong> {{ $processingInfo['csv_file'] ?? 'N/A' }}<br>
+                                            <strong>Rows:</strong> {{ $processingInfo['total_rows'] ?? 0 }}
+                                        @endif
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small>
+                                        <strong>Mirror Job ID:</strong> {{ $processingInfo['mirror_job_id'] ?? 'N/A' }}
+                                    </small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    @endif
+
+                    <!-- Real-time Duplicate Notifications Section -->
+                    <div id="duplicate-notifications-section" style="display: none;">
+                        <div class="alert alert-warning d-flex justify-content-between align-items-start" role="alert">
+                            <div class="flex-grow-1">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-exclamation-triangle"></i> 
+                                    Recent Duplicate Emails Detected (<span id="duplicate-count">0</span>)
+                                </h6>
+                                <p class="mb-2">The following email duplicates were detected during validation:</p>
+                                <div id="duplicate-list" style="max-height: 300px; overflow-y: auto;">
+                                    <!-- Duplicate notifications will be populated here via JavaScript -->
+                                </div>
+                                <hr class="my-2">
+                                <small class="text-muted">
+                                    <strong>New Architecture:</strong> These duplicates were detected by the Beanstalk consumer validation system. 
+                                    Data was stored in Beanstalk first, then validated asynchronously. No duplicate data was inserted into the database.
+                                </small>
+                            </div>
+                            <div class="ms-3">
+                                <button type="button" 
+                                        id="clear-duplicates-btn" 
+                                        class="btn btn-outline-secondary btn-sm"
+                                        title="Clear all duplicate notifications">
+                                    <i class="fas fa-times"></i> Clear All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Duplicate Emails Details -->
                     @if(session('duplicate_emails'))
@@ -470,6 +579,10 @@ let currentCount = 0;
 let isAutoRefreshOn = true;
 let refreshInterval = null;
 
+// Duplicate notifications system
+let duplicateCheckInterval = null;
+let lastDuplicateCheck = null;
+
 console.log('🔄 Auto-refresh system loading...');
 
 // Initialize when page loads
@@ -482,8 +595,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start auto-refresh
     startAutoRefresh();
     
+    // Start duplicate notifications checking
+    startDuplicateNotifications();
+    
+    // Add event listener for clear duplicates button
+    const clearButton = document.getElementById('clear-duplicates-btn');
+    if (clearButton) {
+        clearButton.addEventListener('click', clearDuplicateNotifications);
+    }
+    
     // Cleanup on page unload
-    window.addEventListener('beforeunload', stopAutoRefresh);
+    window.addEventListener('beforeunload', function() {
+        stopAutoRefresh();
+        stopDuplicateNotifications();
+    });
 });
 
 function getCurrentCount() {
@@ -597,6 +722,120 @@ function resumeAutoRefresh() {
 }
 
 console.log('📝 Auto-refresh system loaded. Open browser console to see activity.');
+
+// Duplicate Notifications System
+function startDuplicateNotifications() {
+    console.log('🔔 Starting duplicate notifications system...');
+    
+    // Check immediately
+    checkForDuplicateNotifications();
+    
+    // Check every 3 seconds for new duplicate notifications
+    duplicateCheckInterval = setInterval(checkForDuplicateNotifications, 3000);
+}
+
+function stopDuplicateNotifications() {
+    if (duplicateCheckInterval) {
+        clearInterval(duplicateCheckInterval);
+        duplicateCheckInterval = null;
+    }
+    console.log('🔕 Duplicate notifications system stopped');
+}
+
+function checkForDuplicateNotifications() {
+    fetch('{{ route("form_submissions.recent_duplicates") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.notifications && data.notifications.length > 0) {
+                console.log('📧 Found', data.notifications.length, 'duplicate notifications');
+                displayDuplicateNotifications(data.notifications);
+            } else {
+                // Hide section if no duplicates
+                document.getElementById('duplicate-notifications-section').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.log('Duplicate notifications check failed:', error);
+        });
+}
+
+function displayDuplicateNotifications(notifications) {
+    const section = document.getElementById('duplicate-notifications-section');
+    
+    // Update the count
+    document.getElementById('duplicate-count').textContent = notifications.length;
+    
+    // Build the list HTML
+    let listHtml = '';
+    notifications.forEach(notification => {
+        listHtml += `
+            <div class="mb-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <code>${notification.email}</code>
+                        <small class="text-muted d-block">
+                            <i class="fas fa-${notification.source === 'csv' ? 'file-csv' : 'wpforms'}"></i> 
+                            ${notification.source.toUpperCase()}
+                            ${notification.csv_row ? ` Row ${notification.csv_row}` : ''}
+                            | Existing ID: ${notification.existing_submission_id}
+                        </small>
+                    </div>
+                    <small class="text-muted ms-2">${notification.detected_at}</small>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('duplicate-list').innerHTML = listHtml;
+    section.style.display = 'block';
+}
+
+async function clearDuplicateNotifications() {
+    try {
+        const clearButton = document.getElementById('clear-duplicates-btn');
+        const originalText = clearButton.innerHTML;
+        
+        // Show loading state
+        clearButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
+        clearButton.disabled = true;
+        
+        const response = await fetch('{{ route("form_submissions.clear_duplicates") }}', {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Hide the notifications section
+            document.getElementById('duplicate-notifications-section').style.display = 'none';
+            
+            // Stop polling for duplicates since we cleared them
+            stopDuplicateNotifications();
+            
+            console.log('Duplicate notifications cleared:', result.cleared_count);
+        } else {
+            console.error('Failed to clear notifications:', result.error);
+            alert('Failed to clear notifications. Please try again.');
+        }
+        
+        // Restore button state
+        clearButton.innerHTML = originalText;
+        clearButton.disabled = false;
+        
+    } catch (error) {
+        console.error('Error clearing duplicate notifications:', error);
+        alert('An error occurred while clearing notifications. Please try again.');
+        
+        // Restore button state
+        const clearButton = document.getElementById('clear-duplicates-btn');
+        clearButton.innerHTML = '<i class="fas fa-times"></i> Clear All';
+        clearButton.disabled = false;
+    }
+}
 
 // Alias functions to match button onclick handlers
 function pausePolling() {

@@ -250,6 +250,9 @@ Route::post('form-submissions/csv/process', [FormSubmissionController::class, 'p
 // Form Submission API/Stats routes
 Route::get('form-submissions/api/stats', [FormSubmissionController::class, 'stats'])->name('form_submissions.stats');
 Route::get('form-submissions/api/latest', [FormSubmissionController::class, 'getLatest'])->name('form_submissions.latest');
+Route::post('form-submissions/check-duplicate-email', [FormSubmissionController::class, 'checkDuplicateEmail'])->name('form_submissions.check_duplicate_email');
+Route::get('form-submissions/api/recent-duplicates', [FormSubmissionController::class, 'getRecentDuplicateNotifications'])->name('form_submissions.recent_duplicates');
+Route::delete('form-submissions/api/clear-duplicates', [FormSubmissionController::class, 'clearDuplicateNotifications'])->name('form_submissions.clear_duplicates');
 
 Route::get('upload-csv', [CsvController::class, 'showForm']);
 Route::post('upload-csv', [CsvController::class, 'upload'])->name('csv.upload');

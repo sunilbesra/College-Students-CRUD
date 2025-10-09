@@ -16,7 +16,7 @@ class FormSubmissionValidator
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
-            'phone' => ['nullable', 'integer', 'min:1000000000', 'max:99999999999999'],
+            'phone' => ['nullable', 'string', 'regex:/^[\+]?[0-9]{10,15}$/', 'max:20'],
             'gender' => ['required', 'string', 'in:male,female'],
             'date_of_birth' => ['nullable', 'date', 'date_format:Y-m-d'],
             'course' => ['nullable', 'string', 'max:255'],
@@ -32,7 +32,7 @@ class FormSubmissionValidator
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
-            'phone' => ['required', 'integer', 'min:1000000000', 'max:99999999999999'],
+            'phone' => ['required', 'string', 'regex:/^[\+]?[0-9]{10,15}$/', 'max:20'],
             'gender' => ['required', 'string', 'in:male,female'],
             'date_of_birth' => ['required', 'date', 'date_format:Y-m-d'],
             'course' => ['required', 'string', 'max:255'],
@@ -49,9 +49,8 @@ class FormSubmissionValidator
             'name.required' => 'Student name is required.',
             'email.required' => 'Student email is required.',
             'email.email' => 'Please provide a valid email address.',
-            'phone.integer' => 'Phone number must contain only digits.',
-            'phone.min' => 'Phone number must be at least 10 digits.',
-            'phone.max' => 'Phone number must not exceed 14 digits.',
+            'phone.regex' => 'Phone number must be 10-15 digits, optionally starting with +.',
+            'phone.max' => 'Phone number must not exceed 20 characters.',
             'gender.required' => 'Gender selection is required.',
             'gender.in' => 'Gender must be either male or female.',
             'date_of_birth.date' => 'Date of birth must be a valid date.',
@@ -63,10 +62,23 @@ class FormSubmissionValidator
         $validatedData = $validator->validate();
 
         if (isset($validatedData['email'])) {
+            Log::debug('FormSubmissionValidator::validate - Checking for duplicate email', [
+                'email' => $validatedData['email'],
+                'ignore_id' => $ignoreId ? (string) $ignoreId : null,
+                'method' => 'validate'
+            ]);
+            
             $duplicateSubmission = static::findDuplicateEmail($validatedData['email'], $ignoreId);
             if ($duplicateSubmission) {
+                Log::warning('FormSubmissionValidator::validate - Duplicate email detected', [
+                    'email' => $validatedData['email'],
+                    'duplicate_submission_id' => (string) $duplicateSubmission->_id,
+                    'ignore_id' => $ignoreId ? (string) $ignoreId : null,
+                    'method' => 'validate'
+                ]);
+                
                 throw ValidationException::withMessages([
-                    'email' => ['This email address is already registered.']
+                    'email' => ['This email address is already registered (DEBUG: from FormSubmissionValidator validate method).']
                 ]);
             }
         }
@@ -89,7 +101,8 @@ class FormSubmissionValidator
             'email.required' => 'Student email is required.',
             'email.email' => 'Please provide a valid email address.',
             'phone.required' => 'Phone number is required for CSV uploads.',
-            'phone.integer' => 'Phone number must contain only digits.',
+            'phone.regex' => 'Phone number must be 10-15 digits, optionally starting with +.',
+            'phone.max' => 'Phone number must not exceed 20 characters.',
             'gender.required' => 'Gender selection is required.',
             'gender.in' => 'Gender must be either male or female.',
             'date_of_birth.required' => 'Date of birth is required for CSV uploads.',
@@ -100,10 +113,23 @@ class FormSubmissionValidator
         $validatedData = $validator->validate();
 
         if (isset($validatedData['email'])) {
+            Log::debug('FormSubmissionValidator::validateCsv - Checking for duplicate email', [
+                'email' => $validatedData['email'],
+                'ignore_id' => $ignoreId ? (string) $ignoreId : null,
+                'method' => 'validateCsv'
+            ]);
+            
             $duplicateSubmission = static::findDuplicateEmail($validatedData['email'], $ignoreId);
             if ($duplicateSubmission) {
+                Log::warning('FormSubmissionValidator::validateCsv - Duplicate email detected', [
+                    'email' => $validatedData['email'],
+                    'duplicate_submission_id' => (string) $duplicateSubmission->_id,
+                    'ignore_id' => $ignoreId ? (string) $ignoreId : null,
+                    'method' => 'validateCsv'
+                ]);
+                
                 throw ValidationException::withMessages([
-                    'email' => ['This email address is already registered.']
+                    'email' => ['This email address is already registered (DEBUG: from FormSubmissionValidator validateCsv method).']
                 ]);
             }
         }
@@ -118,27 +144,49 @@ class FormSubmissionValidator
             ->where('status', 'completed');
             
         if ($ignoreId) {
-            try {
-                if (is_object($ignoreId)) {
-                    $query->where('_id', '!=', $ignoreId);
-                } else {
-                    $query->where('_id', '!=', $ignoreId);
+            // Convert ignoreId to string for consistent comparison
+            $ignoreIdString = is_object($ignoreId) ? (string) $ignoreId : (string) $ignoreId;
+            
+            // Get all matching submissions and filter manually for MongoDB compatibility
+            $allSubmissions = FormSubmission::where('data.email', $email)
+                ->where('status', 'completed')
+                ->get();
+                
+            foreach ($allSubmissions as $submission) {
+                if ((string) $submission->_id !== $ignoreIdString) {
+                    Log::debug('Duplicate email found', [
+                        'email' => $email,
+                        'existing_submission_id' => (string) $submission->_id,
+                        'ignore_id' => $ignoreIdString,
+                        'duplicate_found' => true
+                    ]);
+                    return $submission;
                 }
-            } catch (\Exception $e) {
-                $allSubmissions = FormSubmission::where('data.email', $email)
-                    ->where('status', 'completed')
-                    ->get();
-                    
-                foreach ($allSubmissions as $submission) {
-                    if ((string) $submission->_id !== (string) $ignoreId) {
-                        return $submission;
-                    }
-                }
-                return null;
             }
+            
+            Log::debug('No duplicate email found (with ignore)', [
+                'email' => $email,
+                'ignore_id' => $ignoreIdString,
+                'total_matching' => $allSubmissions->count()
+            ]);
+            return null;
         }
         
-        return $query->first();
+        $duplicate = $query->first();
+        if ($duplicate) {
+            Log::debug('Duplicate email found (no ignore)', [
+                'email' => $email,
+                'existing_submission_id' => (string) $duplicate->_id,
+                'duplicate_found' => true
+            ]);
+        } else {
+            Log::debug('No duplicate email found (no ignore)', [
+                'email' => $email,
+                'duplicate_found' => false
+            ]);
+        }
+        
+        return $duplicate;
     }
 
     // Validate a batch of CSV rows 
@@ -255,7 +303,7 @@ class FormSubmissionValidator
         return [
             'name' => 'Required, maximum 255 characters',
             'email' => 'Required, valid email format, maximum 255 characters',
-            'phone' => 'Optional for forms, required for CSV, 10-14 digits only',
+            'phone' => 'Optional for forms, required for CSV, 10-15 digits, optionally starting with +',
             'gender' => 'Required, either "male" or "female"',
             'date_of_birth' => 'Optional for forms, required for CSV, YYYY-MM-DD format',
             'course' => 'Optional for forms, required for CSV, maximum 255 characters',

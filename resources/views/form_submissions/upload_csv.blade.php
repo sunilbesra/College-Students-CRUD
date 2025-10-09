@@ -28,6 +28,41 @@
                         </div>
                     @endif
 
+                    <!-- Display duplicate information -->
+                    @if(session('duplicate_details'))
+                        @php $duplicates = session('duplicate_details'); @endphp
+                        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                Duplicate Emails Detected ({{ $duplicates['count'] }})
+                            </h6>
+                            <p class="mb-2">
+                                The following email addresses already exist in the system and were skipped:
+                            </p>
+                            <ul class="mb-2">
+                                @foreach($duplicates['emails'] as $duplicate)
+                                    <li>
+                                        <strong>{{ $duplicate['email'] }}</strong> 
+                                        (Row {{ $duplicate['row'] }}) - 
+                                        <small class="text-muted">Existing ID: {{ $duplicate['existing_id'] }}</small>
+                                    </li>
+                                @endforeach
+                                @if($duplicates['count'] > $duplicates['total_shown'])
+                                    <li class="text-muted">
+                                        <em>... and {{ $duplicates['count'] - $duplicates['total_shown'] }} more duplicates</em>
+                                    </li>
+                                @endif
+                            </ul>
+                            <p class="mb-0">
+                                <small>
+                                    <strong>Note:</strong> These rows were not inserted into the database to prevent duplicates. 
+                                    Only unique email addresses have been processed.
+                                </small>
+                            </p>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    @endif
+
                     <!-- Instructions -->
                     <div class="alert alert-info">
                         <h6 class="alert-heading">

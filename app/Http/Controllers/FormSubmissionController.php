@@ -105,14 +105,14 @@ class FormSubmissionController extends Controller
      */
     public function store(Request $request)
     {
-        // Basic validation
-        // $request->validate([
-        //     'operation' => 'required|in:create,update,delete',
-        //     'student_id' => 'nullable|string',
-        //     'data' => 'required|array',
-        //     'source' => 'required|in:form,api,csv',
-        //     'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
-        // ]);
+        // Basic validation first
+        $request->validate([
+            'operation' => 'required|in:create,update,delete',
+            'student_id' => 'nullable|string',
+            'data' => 'required|array',
+            'source' => 'required|in:form,api,csv',
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+        ]);
 
         // Handle profile image upload
         $profileImagePath = null;
@@ -126,80 +126,42 @@ class FormSubmissionController extends Controller
             $formData['profile_image_path'] = $profileImagePath;
         }
 
-        // Immediate validation including duplicate email check for instant feedback
-        try {
-            $validatedData = FormSubmissionValidator::validate($formData, $request->student_id);
-        } catch (ValidationException $e) {
-            // Fire duplicate email detected event if it's an email duplicate error
-            if (isset($e->errors()['email'])) {
-                Log::warning('🔄 FIRING EVENT: DuplicateEmailDetected (immediate validation)', [
-                    'controller' => 'FormSubmissionController',
-                    'email' => $formData['email'] ?? 'unknown',
-                    'source' => $request->source,
-                    'validation_errors' => $e->errors()
-                ]);
-                event(new DuplicateEmailDetected(
-                    $formData['email'] ?? 'unknown',
-                    $request->source,
-                    null,
-                    $formData
-                ));
-                Log::debug('✅ DuplicateEmailDetected event fired from immediate validation');
-            }
-            
-            return redirect()->back()
-                ->withErrors($e->errors())
-                ->withInput()
-                ->with('error', 'Please correct the validation errors and try again.');
-        }
+        // No duplicate validation in controller - let Beanstalk consumer handle all validation
 
-        // Create initial FormSubmission record
-        $formSubmission = FormSubmission::create([
-            'operation' => $request->operation,
-            'student_id' => $request->student_id,
-            'data' => $validatedData,
-            'source' => $request->source,
-            'status' => 'queued',
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent()
-        ]);
-
-        // Fire FormSubmissionCreated event
-        Log::info('🎯 FIRING EVENT: FormSubmissionCreated', [
-            'controller' => 'FormSubmissionController',
-            'submission_id' => $formSubmission->_id,
-            'operation' => $request->operation,
-            'source' => $request->source,
-            'email' => $validatedData['email'] ?? 'N/A'
-        ]);
-        event(new FormSubmissionCreated($formSubmission, $validatedData, $request->source));
-        Log::debug('✅ FormSubmissionCreated event fired successfully');
-
-        // Prepare data for direct Beanstalk processing
+        // Prepare data for validation and insertion job
         $submissionData = [
             'operation' => $request->operation,
             'student_id' => $request->student_id,
-            'data' => $validatedData,
+            'data' => $formData,
             'source' => $request->source,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
-            'submitted_at' => now()->toDateTimeString(),
-            'submission_id' => $formSubmission->_id
+            'submitted_at' => now()->toDateTimeString()
         ];
 
-        // Send directly to Beanstalk for processing (unified architecture)
-        ProcessFormSubmissionData::dispatch($formSubmission->_id, $submissionData)
+        // FIRST: Mirror form submission to Beanstalk tube immediately (before Laravel queue)
+        $mirrorJobId = $this->mirrorToBeanstalk('form_submission_created', $submissionData);
+
+        // SECOND: Dispatch to ProcessFormSubmissionData for validation and processing
+        ProcessFormSubmissionData::dispatch(null, $submissionData)
             ->onQueue(env('BEANSTALKD_FORM_SUBMISSION_QUEUE', 'form_submission_jobs'));
 
-        Log::info('Form submission sent to Beanstalk for processing', [
-            'submission_id' => $formSubmission->_id,
+        Log::info('Form submission stored in Beanstalk and sent for processing', [
             'operation' => $request->operation,
             'source' => $request->source,
-            'queue' => env('BEANSTALKD_FORM_SUBMISSION_QUEUE', 'form_submission_jobs')
+            'email' => $formData['email'] ?? 'N/A',
+            'mirror_job_id' => $mirrorJobId,
+            'job' => 'ProcessFormSubmissionData'
         ]);
 
         return redirect()->route('form_submissions.index')
-            ->with('success', 'Form submission sent for processing. The consumer will validate and store the data!');
+            ->with('success', 'Form submission stored in Beanstalk for validation and processing.')
+            ->with('processing_info', [
+                'type' => 'form_submission',
+                'email' => $formData['email'] ?? 'N/A',
+                'mirror_job_id' => $mirrorJobId,
+                'message' => 'Your submission is being validated. If there are any duplicates, you will see a notification on this page shortly.'
+            ]);
     }
 
     /**
@@ -420,15 +382,10 @@ class FormSubmissionController extends Controller
         $filePath = $file->store('csv_uploads', 'local');
         $fullPath = storage_path('app/' . $filePath);
 
-        // Read CSV and create form submissions
+        // Read CSV data
         $handle = fopen($fullPath, 'r');
         $headers = fgetcsv($handle); // Get headers
         $rowCount = 0;
-        $processedCount = 0;
-        $errors = [];
-        $duplicateEmails = [];
-        $csvEmails = []; // Track emails within this CSV file
-        $validRows = []; // Collect valid rows for batch processing
 
         if (!$headers) {
             return redirect()->route('form_submissions.index')
@@ -455,9 +412,7 @@ class FormSubmissionController extends Controller
             }
             
             if (count($row) !== count($headers)) {
-                $error = "Row {$rowCount} has different column count, skipping";
-                $errors[] = $error;
-                Log::warning($error, [
+                Log::warning("Row {$rowCount} has different column count, skipping", [
                     'expected' => count($headers),
                     'actual' => count($row),
                     'row_data' => $row
@@ -465,9 +420,18 @@ class FormSubmissionController extends Controller
                 continue;
             }
 
-            // Combine headers with row data
+            // Combine headers with row data and clean empty keys
             $rowData = array_combine($headers, $row);
-            $csvData[] = $rowData;
+            // Remove any empty keys and trim values
+            $cleanedRowData = [];
+            foreach ($rowData as $key => $value) {
+                $cleanedKey = trim($key);
+                $cleanedValue = is_string($value) ? trim($value) : $value;
+                if (!empty($cleanedKey)) {
+                    $cleanedRowData[$cleanedKey] = $cleanedValue;
+                }
+            }
+            $csvData[] = $cleanedRowData;
         }
 
         // Fire CSV upload started event
@@ -487,117 +451,74 @@ class FormSubmissionController extends Controller
         ));
         Log::debug('✅ CsvUploadStarted event fired successfully');
 
-        // Use FormSubmissionValidator for batch validation
-        $validationResults = FormSubmissionValidator::validateCsvBatch($csvData);
-        $summary = FormSubmissionValidator::getCsvValidationSummary($validationResults);
-
-        // Process valid rows
-        foreach ($validationResults['valid'] as $validRow) {
-            $validRows[] = [
-                'operation' => $operation,
-                'student_id' => $validRow['data']['student_id'] ?? null,
-                'data' => $validRow['data'],
-                'source' => 'csv',
-                'csv_row' => $validRow['row']
-            ];
-        }
-
-        // Collect errors from validation
-        foreach ($validationResults['invalid'] as $invalidRow) {
-            $errorMessages = [];
-            foreach ($invalidRow['errors'] as $field => $fieldErrors) {
-                $errorMessages[] = "$field: " . implode(', ', $fieldErrors);
-            }
-            $errors[] = "Row {$invalidRow['row']}: " . implode(' | ', $errorMessages);
-        }
-
-        // Collect duplicate errors and fire events
-        foreach ($validationResults['duplicates'] as $duplicate) {
-            $errors[] = "Row {$duplicate['row']}: {$duplicate['error']}";
-            $duplicateEmails[] = $duplicate['email'];
-            
-            // Fire duplicate email detected event
-            Log::warning('🔄 FIRING EVENT: DuplicateEmailDetected (from CSV)', [
-                'controller' => 'FormSubmissionController',
-                'email' => $duplicate['email'],
-                'source' => 'csv',
-                'row' => $duplicate['row'],
-                'error' => $duplicate['error']
-            ]);
-            event(new DuplicateEmailDetected(
-                $duplicate['email'],
-                'csv',
-                null,
-                null,
-                $duplicate['row']
-            ));
-            Log::debug('✅ DuplicateEmailDetected event fired from CSV processing');
-        }
-
-        $processedCount = count($validRows);
-        
-        Log::info('CSV validation completed', [
-            'csv_file' => $file->getClientOriginalName(),
-            'total_rows' => $summary['total_rows'],
-            'valid_rows' => $summary['valid_rows'],
-            'invalid_rows' => $summary['invalid_rows'],
-            'duplicate_rows' => $summary['duplicate_rows']
-        ]);
-
         fclose($handle);
 
         // Clean up the uploaded file
         unlink($fullPath);
 
-        // Dispatch single batch job for all valid rows
-        if (!empty($validRows)) {
-            $batchSubmissionData = [
+        // No duplicate validation in controller - prepare all CSV data for Beanstalk processing
+        $batchData = [];
+        
+        foreach ($csvData as $rowIndex => $rowData) {
+            // Add all rows to batch data - let Beanstalk consumer handle duplicate validation
+            $batchData[] = [
                 'operation' => $operation,
+                'student_id' => $rowData['student_id'] ?? null,
+                'data' => $rowData,
                 'source' => 'csv',
-                'batch_data' => $validRows,
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'submitted_at' => now()->toDateTimeString(),
-                'csv_file' => $file->getClientOriginalName(),
-                'total_rows' => count($validRows)
+                'csv_row' => $rowIndex + 1
             ];
+        }
 
+        // Prepare batch submission data for Beanstalk
+        $batchSubmissionData = [
+            'operation' => $operation,
+            'source' => 'csv',
+            'batch_data' => $batchData, // Consumer expects this key
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'submitted_at' => now()->toDateTimeString(),
+            'csv_file' => $file->getClientOriginalName(),
+            'total_rows' => count($batchData)
+        ];
+
+        // FIRST: Mirror CSV batch to Beanstalk tube immediately (before Laravel queue)
+        $mirrorJobId = null;
+        if (count($batchData) > 0) {
+            $mirrorJobId = $this->mirrorToBeanstalk('csv_batch_uploaded', $batchSubmissionData);
+        }
+
+        // SECOND: Dispatch to ProcessFormSubmissionData for validation and processing
+        if (count($batchData) > 0) {
             ProcessFormSubmissionData::dispatch(null, $batchSubmissionData)
                 ->onQueue(env('BEANSTALKD_FORM_SUBMISSION_QUEUE', 'form_submission_jobs'));
-
-            Log::info('CSV batch job dispatched to Beanstalk', [
-                'total_rows' => count($validRows),
-                'operation' => $operation,
-                'csv_file' => $file->getClientOriginalName()
-            ]);
         }
 
-        Log::info('CSV file processed for form submissions', [
-            'total_rows' => $summary['total_rows'],
-            'valid_rows' => $summary['valid_rows'],
-            'invalid_rows' => $summary['invalid_rows'],
-            'duplicate_rows' => $summary['duplicate_rows'],
-            'processed_rows' => $processedCount,
-            'operation' => $operation
+        Log::info('CSV batch stored in Beanstalk and sent for processing', [
+            'total_rows' => count($csvData),
+            'batch_rows' => count($batchData),
+            'operation' => $operation,
+            'csv_file' => $file->getClientOriginalName(),
+            'mirror_job_id' => $mirrorJobId,
+            'job' => 'ProcessFormSubmissionData'
         ]);
 
-        // Build detailed success/warning message
-        $message = "CSV processed! {$summary['valid_rows']} form submissions queued for processing.";
-        $alertType = 'success';
-        
-        if ($summary['duplicate_rows'] > 0) {
-            $message .= " {$summary['duplicate_rows']} duplicate emails were skipped.";
-            $alertType = 'warning';
-        }
-        
-        if ($summary['invalid_rows'] > 0) {
-            $message .= " {$summary['invalid_rows']} validation errors occurred.";
-            $alertType = 'warning';
-        }
-
-        if ($summary['total_rows'] === 0) {
-            $message = "No valid data found in CSV file.";
+        // Simple success message - validation will happen in Beanstalk consumer
+        if (count($csvData) === 0) {
+            $message = "No data found in CSV file.";
             $alertType = 'error';
+        } else {
+            $message = "CSV uploaded successfully! " . count($batchData) . " rows stored in Beanstalk for validation and processing.";
+            $alertType = 'success';
+            
+            // Add processing info for frontend display
+            session()->flash('processing_info', [
+                'type' => 'csv_upload',
+                'csv_file' => $file->getClientOriginalName(),
+                'total_rows' => count($batchData),
+                'mirror_job_id' => $mirrorJobId,
+                'message' => 'Your CSV is being processed. Any duplicate emails will be shown in notifications below after validation completes.'
+            ]);
         }
 
         // Calculate processing time
@@ -609,25 +530,18 @@ class FormSubmissionController extends Controller
             'file_name' => $file->getClientOriginalName(),
             'operation' => $operation,
             'processing_time_ms' => (int) $processingTime,
-            'validation_summary' => $summary,
-            'batch_job_id' => $processedCount > 0 ? 'batch_job_dispatched' : null
+            'total_rows' => count($csvData),
+            'batch_job_id' => count($batchData) > 0 ? 'batch_job_dispatched' : null,
+            'mirror_job_id' => $mirrorJobId
         ]);
         event(new CsvUploadCompleted(
             $file->getClientOriginalName(),
             $operation,
-            $summary,
+            ['total_rows' => count($csvData), 'valid_rows' => 0, 'invalid_rows' => 0, 'duplicate_rows' => 0], // Real validation will happen in consumer
             (int) $processingTime,
-            $processedCount > 0 ? 'batch_job_dispatched' : null
+            count($batchData) > 0 ? 'batch_job_dispatched' : null
         ));
         Log::debug('✅ CsvUploadCompleted event fired successfully');
-
-        // Store detailed errors in session for display
-        if (!empty($errors)) {
-            session()->flash('csv_errors', $errors);
-        }
-        if (!empty($duplicateEmails)) {
-            session()->flash('duplicate_emails', array_unique($duplicateEmails));
-        }
 
         return redirect()->route('form_submissions.index')
             ->with($alertType, $message);
@@ -651,19 +565,44 @@ class FormSubmissionController extends Controller
                 'data' => $data,
                 'queued_at' => now()->toDateTimeString(),
                 'source' => 'form_submission_controller',
+                'mirror_id' => uniqid('mirror_', true), // Unique identifier for tracking
             ], JSON_UNESCAPED_UNICODE);
             
-            $pheanstalk->useTube($mirrorTube)->put($payload);
+            $job = $pheanstalk->useTube($mirrorTube)->put($payload);
             
-            Log::debug('Form submission mirrored to Beanstalk', [
+            Log::info('✅ Form submission successfully mirrored to Beanstalk', [
                 'action' => $action,
                 'tube' => $mirrorTube,
-                'submission_id' => $submissionId
+                'submission_id' => $submissionId,
+                'job_id' => $job->getId(),
+                'payload_size' => strlen($payload) . ' bytes',
+                'beanstalk_host' => $pheanstalkHost . ':' . $pheanstalkPort
             ]);
             
+            return $job->getId(); // Return job ID for tracking
+            
+        } catch (\Pheanstalk\Exception\ConnectionException $e) {
+            Log::error("❌ Beanstalkd connection failed for mirror ({$action})", [
+                'error' => $e->getMessage(),
+                'host' => $pheanstalkHost ?? 'unknown',
+                'port' => $pheanstalkPort ?? 'unknown',
+                'submission_id' => $submissionId
+            ]);
+        } catch (\Pheanstalk\Exception\ServerException $e) {
+            Log::error("❌ Beanstalkd server error for mirror ({$action})", [
+                'error' => $e->getMessage(),
+                'tube' => $mirrorTube ?? 'unknown',
+                'submission_id' => $submissionId
+            ]);
         } catch (\Throwable $e) {
-            Log::warning("Failed to write form submission mirror to beanstalk ({$action}): " . $e->getMessage());
+            Log::warning("❌ Failed to write form submission mirror to beanstalk ({$action})", [
+                'error' => $e->getMessage(),
+                'submission_id' => $submissionId,
+                'error_type' => get_class($e)
+            ]);
         }
+        
+        return null;
     }
 
     /**
@@ -707,6 +646,105 @@ class FormSubmissionController extends Controller
     }
 
     /**
+     * Check if email is duplicate (AJAX endpoint)
+     */
+    public function checkDuplicateEmail(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email'
+        ]);
+
+        $email = trim(strtolower($request->email));
+        
+        // Check for existing form submissions with same email
+        $existingSubmission = FormSubmission::where('data.email', $email)
+            ->where('status', 'completed')
+            ->where('operation', 'create')
+            ->first();
+
+        if ($existingSubmission) {
+            return response()->json([
+                'is_duplicate' => true,
+                'existing_id' => substr($existingSubmission->_id, -8),
+                'existing_submission_id' => $existingSubmission->_id,
+                'message' => 'This email address is already registered in the system.'
+            ]);
+        }
+
+        return response()->json([
+            'is_duplicate' => false,
+            'message' => 'Email is available.'
+        ]);
+    }
+
+    /**
+     * Get recent duplicate notifications (AJAX endpoint for frontend)
+     */
+    public function getRecentDuplicateNotifications(Request $request)
+    {
+        try {
+            // Get recent duplicate notifications from the last 10 minutes
+            $recentNotifications = \App\Models\Notification::where('title', 'like', '%Duplicate Email%')
+                ->where('created_at', '>=', now()->subMinutes(10))
+                ->orderBy('created_at', 'desc')
+                ->limit(20)
+                ->get();
+
+            $duplicateNotifications = [];
+            
+            foreach ($recentNotifications as $notification) {
+                $data = $notification->data ?? [];
+                
+                $duplicateNotifications[] = [
+                    'id' => $notification->_id,
+                    'email' => $data['email'] ?? 'N/A',
+                    'source' => $data['source'] ?? 'unknown',
+                    'csv_row' => $data['csv_row'] ?? null,
+                    'existing_submission_id' => substr($data['existing_submission_id'] ?? '', -8),
+                    'duplicate_count' => $data['duplicate_count'] ?? 1,
+                    'detected_at' => $notification->created_at->diffForHumans(),
+                    'message' => $this->buildDuplicateMessage($data),
+                    'created_at' => $notification->created_at->toDateTimeString()
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'notifications' => $duplicateNotifications,
+                'count' => count($duplicateNotifications),
+                'last_check' => now()->toDateTimeString()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to fetch duplicate notifications: ' . $e->getMessage(),
+                'notifications' => [],
+                'count' => 0
+            ]);
+        }
+    }
+
+    /**
+     * Build duplicate message based on notification data
+     */
+    private function buildDuplicateMessage(array $data): string
+    {
+        $email = $data['email'] ?? 'Unknown email';
+        $source = $data['source'] ?? 'unknown';
+        $csvRow = $data['csv_row'] ?? null;
+        $existingId = substr($data['existing_submission_id'] ?? '', -8);
+
+        if ($source === 'csv' && $csvRow) {
+            return "Duplicate email '{$email}' detected in CSV row {$csvRow}. Already exists as submission #{$existingId}.";
+        } elseif ($source === 'form') {
+            return "Duplicate email '{$email}' detected in form submission. Already exists as submission #{$existingId}.";
+        } else {
+            return "Duplicate email '{$email}' detected via {$source}. Already exists as submission #{$existingId}.";
+        }
+    }
+
+    /**
      * Handle profile image upload
      */
     private function handleImageUpload($file): string
@@ -736,6 +774,33 @@ class FormSubmissionController extends Controller
                 'file_name' => $file->getClientOriginalName()
             ]);
             throw new \Exception('Failed to upload profile image: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Clear all duplicate notifications (AJAX endpoint)
+     */
+    public function clearDuplicateNotifications(Request $request)
+    {
+        try {
+            // Delete all duplicate email notifications
+            $deletedCount = \App\Models\Notification::where('title', 'like', '%Duplicate Email%')->delete();
+
+            Log::info("Cleared {$deletedCount} duplicate notifications");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'All duplicate notifications cleared successfully',
+                'cleared_count' => $deletedCount
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error clearing duplicate notifications: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to clear duplicate notifications: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

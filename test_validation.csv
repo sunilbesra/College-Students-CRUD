@@ -1,0 +1,4 @@
+name,email,phone,gender,date_of_birth,course,enrollment_date,grade,address
+John Doe,john.doe@example.com,1234567890,male,1995-01-15,Computer Science,2023-09-01,A,123 Main St
+Jane Smith,jane.smith@example.com,+918822992295,female,1996-02-20,Mathematics,2023-09-01,B,456 Oak Ave
+Bob Wilson,bob.wilson@example.com,09967135808,male,1994-12-10,Physics,2023-09-01,A,789 Pine Rd

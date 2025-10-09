@@ -5,13 +5,15 @@ namespace App\Jobs;
 use App\Models\FormSubmission;
 use App\Services\FormSubmissionValidator;
 use App\Events\FormSubmissionProcessed;
-    use App\Events\DuplicateEmailDetected;
-    use Illuminate\Bus\Queueable;
-    use Illuminate\Contracts\Queue\ShouldQueue;
-    use Illuminate\Foundation\Bus\Dispatchable;
-    use Illuminate\Queue\InteractsWithQueue;
-    use Illuminate\Queue\SerializesModels;
+use App\Events\DuplicateEmailDetected;
+use App\Jobs\ProcessDuplicateEmailCheck;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Pheanstalk\Pheanstalk;
 
 class ProcessFormSubmissionData implements ShouldQueue
 {
@@ -67,41 +69,109 @@ class ProcessFormSubmissionData implements ShouldQueue
                     throw new \Exception("Form submission record not found: {$this->submissionId}");
                 }
             } else {
-                // Unified path: Create FormSubmission record from Beanstalk data
+                // Unified path: Validate data BEFORE creating FormSubmission record
+                
+                // Step 1: Validate the raw data first (including duplicate check)
+                try {
+                    $validatedData = $this->validateSubmissionData($this->submissionData['data']);
+                    
+                    Log::info('Data validation passed - proceeding to create FormSubmission', [
+                        'operation' => $this->submissionData['operation'],
+                        'source' => $this->submissionData['source'],
+                        'email' => $this->submissionData['data']['email'] ?? 'N/A'
+                    ]);
+                    
+                } catch (\Illuminate\Validation\ValidationException $e) {
+                    $email = $this->submissionData['data']['email'] ?? 'unknown';
+                    
+                    // Check if this is a duplicate email validation error
+                    if (isset($e->errors()['email'])) {
+                        $emailErrors = $e->errors()['email'];
+                        foreach ($emailErrors as $emailError) {
+                            if (str_contains(strtolower($emailError), 'already registered') || 
+                                str_contains(strtolower($emailError), 'duplicate')) {
+                                
+                                Log::info('Consumer validation: Duplicate email detected - queuing async duplicate processing', [
+                                    'email' => $email,
+                                    'operation' => $this->submissionData['operation'],
+                                    'source' => $this->submissionData['source'],
+                                    'validation_level' => 'consumer_validation'
+                                ]);
+                                
+                                // Queue asynchronous duplicate email processing (check + notification)
+                                ProcessDuplicateEmailCheck::dispatch(
+                                    $email,
+                                    $this->submissionData['source'],
+                                    $this->submissionData['data'],
+                                    null, // No existing submission ID yet
+                                    null, // No CSV row for form submissions
+                                    $this->submissionData['operation']
+                                );
+                                
+                                Log::debug('✅ Duplicate email processing queued asynchronously', [
+                                    'email' => $email,
+                                    'source' => $this->submissionData['source']
+                                ]);
+                                
+                                // Exit early - duplicate prevented by consumer validation
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // For other validation errors, log and exit
+                    Log::warning('Consumer validation failed - preventing FormSubmission creation', [
+                        'operation' => $this->submissionData['operation'],
+                        'source' => $this->submissionData['source'],
+                        'validation_errors' => $e->errors()
+                    ]);
+                    return;
+                }
+                
+                // Step 2: If validation passed, create FormSubmission record
                 $formSubmission = FormSubmission::create([
                     'operation' => $this->submissionData['operation'],
                     'student_id' => $this->submissionData['student_id'] ?? null,
-                    'data' => $this->submissionData['data'],
+                    'data' => $validatedData, // Store validated data
                     'source' => $this->submissionData['source'],
                     'ip_address' => $this->submissionData['ip_address'] ?? null,
                     'user_agent' => $this->submissionData['user_agent'] ?? null,
-                    'status' => 'processing'
+                    'status' => 'processing',
+                    'csv_row' => $this->submissionData['csv_row'] ?? null
                 ]);
                 
-                Log::info('Created FormSubmission record from Beanstalk data', [
+                Log::info('Created FormSubmission record after consumer validation', [
                     'submission_id' => $formSubmission->_id,
                     'operation' => $formSubmission->operation,
-                    'source' => $formSubmission->source
+                    'source' => $formSubmission->source,
+                    'email' => $formSubmission->data['email'] ?? 'N/A'
                 ]);
             }
 
             // Update status to processing
             $formSubmission->update(['status' => 'processing']);
             
-            // Step 2: Validate the data using FormSubmissionValidator
-            // Pass current submission ID to exclude it from duplicate check
-            $validatedData = $this->validateSubmissionData($formSubmission->data, $formSubmission->_id);
+            // Step 2: Data is already validated - just process the form submission
 
             // Step 3: Process the validated data (store in FormSubmission only)
-            $result = $this->processFormSubmission($formSubmission, $validatedData);
+            $result = $this->processFormSubmission($formSubmission, $formSubmission->data);
 
             // Step 4: Update FormSubmission as completed with processed data
             $formSubmission->update([
                 'status' => 'completed',
-                'data' => $validatedData, // Store validated data
                 'processed_at' => now(),
                 'error_message' => null
             ]);
+
+            // Mirror completed submission to Beanstalk for external consumers
+            $this->mirrorToBeanstalk('form_submission_processed', [
+                'submission_id' => $formSubmission->_id,
+                'operation' => $formSubmission->operation,
+                'source' => $formSubmission->source,
+                'data' => $formSubmission->data,
+                'status' => 'completed',
+                'processed_at' => $formSubmission->processed_at
+            ], $formSubmission->_id);
 
             // Fire FormSubmissionProcessed event
             Log::info(' FIRING EVENT: FormSubmissionProcessed (completed)', [
@@ -118,7 +188,7 @@ class ProcessFormSubmissionData implements ShouldQueue
                 'submission_id' => $formSubmission->_id,
                 'operation' => $formSubmission->operation,
                 'source' => $formSubmission->source,
-                'email' => $validatedData['email'] ?? 'N/A'
+                'email' => $formSubmission->data['email'] ?? 'N/A'
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -135,21 +205,25 @@ class ProcessFormSubmissionData implements ShouldQueue
                         if (str_contains(strtolower($emailError), 'already registered') || 
                             str_contains(strtolower($emailError), 'duplicate')) {
                             
-                            // Fire duplicate email detected event
-                            Log::warning('🔄 FIRING EVENT: DuplicateEmailDetected (from Beanstalk job)', [
+                            // Queue asynchronous duplicate email processing
+                            Log::warning('🔄 QUEUING: Async duplicate processing (from Beanstalk job)', [
                                 'job' => 'ProcessFormSubmissionData',
                                 'submission_id' => $formSubmission->_id,
                                 'email' => $formSubmission->data['email'] ?? 'unknown',
                                 'source' => $formSubmission->source,
                                 'validation_error' => $emailError
                             ]);
-                            event(new DuplicateEmailDetected(
+                            
+                            ProcessDuplicateEmailCheck::dispatch(
                                 $formSubmission->data['email'] ?? 'unknown',
                                 $formSubmission->source,
+                                $formSubmission->data,
                                 $formSubmission->_id,
-                                $formSubmission->data
-                            ));
-                            Log::debug('✅ DuplicateEmailDetected event fired from Beanstalk job');
+                                null, // No CSV row for regular form submissions
+                                $formSubmission->operation ?? 'create'
+                            );
+                            
+                            Log::debug('✅ Async duplicate processing queued from Beanstalk job');
                             break;
                         }
                     }
@@ -223,6 +297,16 @@ class ProcessFormSubmissionData implements ShouldQueue
     }
 
     /**
+     * Validate CSV data using FormSubmissionValidator
+     */
+    private function validateCsvData(array $data, $ignoreId = null): array
+    {
+        // Use FormSubmissionValidator to validate CSV data
+        // Pass ignoreId to exclude current submission from duplicate check
+        return FormSubmissionValidator::validateCsv($data, $ignoreId);
+    }
+
+    /**
      * Process the form submission (validate and store in FormSubmission only)
      */
     private function processFormSubmission(FormSubmission $formSubmission, array $validatedData): array
@@ -256,42 +340,65 @@ class ProcessFormSubmissionData implements ShouldQueue
     {
         $email = $validatedData['email'];
         
-        // Check for existing form submission with same email
-        $existingSubmission = FormSubmission::where('data.email', $email)
-            ->where('status', 'completed')
-            ->where('operation', 'create')
-            ->first();
+        // Comprehensive duplicate check for create operations
+        $duplicateResult = $this->checkForDuplicateEmail($email, $formSubmission->_id);
+        
+        if ($duplicateResult['is_duplicate']) {
+            $existingSubmission = $duplicateResult['existing_submission'];
             
-        if ($existingSubmission) {
-            Log::warning('Form submission with email already exists', [
+            Log::warning('Duplicate email detected in ProcessFormSubmissionData job', [
                 'email' => $email,
                 'existing_submission_id' => $existingSubmission->_id,
-                'current_submission_id' => $formSubmission->_id
+                'current_submission_id' => $formSubmission->_id,
+                'source' => $formSubmission->source,
+                'operation' => $formSubmission->operation
             ]);
             
-            // Mark as duplicate but completed
+            // Mark current submission as failed due to duplicate
             $formSubmission->update([
-                'error_message' => "Duplicate email: A form submission with email '{$email}' already exists (ID: {$existingSubmission->_id})",
+                'status' => 'failed',
+                'error_message' => "Duplicate email detected: A form submission with email '{$email}' already exists (ID: {$existingSubmission->_id})",
                 'duplicate_of' => $existingSubmission->_id
+            ]);
+            
+            // Queue async duplicate processing for comprehensive analytics and notifications
+            ProcessDuplicateEmailCheck::dispatch(
+                $email,
+                $formSubmission->source,
+                $formSubmission->data,
+                $formSubmission->_id,
+                $formSubmission->csv_row ?? null,
+                $formSubmission->operation
+            )->onQueue(env('BEANSTALKD_DUPLICATE_CHECK_QUEUE', 'duplicate_check_jobs'));
+            
+            Log::info('Queued async duplicate processing from ProcessFormSubmissionData', [
+                'email' => $email,
+                'current_submission_id' => $formSubmission->_id,
+                'existing_submission_id' => $existingSubmission->_id,
+                'job' => 'ProcessDuplicateEmailCheck'
             ]);
             
             return [
                 'action' => 'duplicate_detected',
                 'existing_submission_id' => $existingSubmission->_id,
-                'email' => $email
+                'current_submission_id' => $formSubmission->_id,
+                'email' => $email,
+                'status' => 'failed'
             ];
         }
 
-        Log::info('Form submission create operation processed', [
+        Log::info('Form submission create operation processed - no duplicates found', [
             'submission_id' => $formSubmission->_id,
             'email' => $email,
-            'name' => $validatedData['name'] ?? 'N/A'
+            'name' => $validatedData['name'] ?? 'N/A',
+            'source' => $formSubmission->source
         ]);
 
         return [
             'action' => 'created',
             'submission_id' => $formSubmission->_id,
-            'email' => $email
+            'email' => $email,
+            'status' => 'completed'
         ];
     }
 
@@ -434,6 +541,42 @@ class ProcessFormSubmissionData implements ShouldQueue
     }
 
     /**
+     * Check for duplicate email in existing form submissions
+     */
+    private function checkForDuplicateEmail(string $email, ?string $ignoreSubmissionId = null): array
+    {
+        $email = trim(strtolower($email));
+        
+        // Build query to check for existing submissions with same email
+        $query = FormSubmission::where('data.email', $email)
+            ->where('status', 'completed')
+            ->where('operation', 'create');
+        
+        // Exclude current submission if provided
+        if ($ignoreSubmissionId) {
+            $query->where('_id', '!=', $ignoreSubmissionId);
+        }
+        
+        $existingSubmission = $query->first();
+        
+        if ($existingSubmission) {
+            return [
+                'is_duplicate' => true,
+                'existing_submission' => $existingSubmission,
+                'existing_submission_id' => $existingSubmission->_id,
+                'email' => $email
+            ];
+        }
+        
+        return [
+            'is_duplicate' => false,
+            'existing_submission' => null,
+            'existing_submission_id' => null,
+            'email' => $email
+        ];
+    }
+
+    /**
      * Process batch submission (CSV with multiple rows)
      */
     private function processBatchSubmission(): void
@@ -450,31 +593,93 @@ class ProcessFormSubmissionData implements ShouldQueue
 
         foreach ($batchData as $rowIndex => $rowData) {
             try {
-                // Create individual FormSubmission for each row
+                // Step 1: Validate CSV data BEFORE creating FormSubmission record
+                $validatedData = $this->validateCsvData($rowData['data']);
+                
+                Log::debug('CSV row validation passed', [
+                    'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
+                    'email' => $rowData['data']['email'] ?? 'N/A'
+                ]);
+                
+                // Step 2: Check for duplicates before creating FormSubmission
+                $email = $validatedData['email'] ?? null;
+                if ($email && $rowData['operation'] === 'create') {
+                    $duplicateResult = $this->checkForDuplicateEmail($email);
+                    
+                    if ($duplicateResult['is_duplicate']) {
+                        $existingSubmission = $duplicateResult['existing_submission'];
+                        
+                        Log::warning('CSV row duplicate email detected in job', [
+                            'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
+                            'email' => $email,
+                            'existing_submission_id' => $existingSubmission->_id
+                        ]);
+                        
+                        // Create failed FormSubmission record for tracking
+                        $formSubmission = FormSubmission::create([
+                            'operation' => $rowData['operation'],
+                            'student_id' => $rowData['student_id'] ?? null,
+                            'data' => $validatedData,
+                            'source' => $rowData['source'],
+                            'ip_address' => $this->submissionData['ip_address'] ?? null,
+                            'user_agent' => $this->submissionData['user_agent'] ?? null,
+                            'status' => 'failed',
+                            'error_message' => "Duplicate email: A form submission with email '{$email}' already exists (ID: {$existingSubmission->_id})",
+                            'duplicate_of' => $existingSubmission->_id,
+                            'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1
+                        ]);
+                        
+                        // Queue async duplicate processing
+                        ProcessDuplicateEmailCheck::dispatch(
+                            $email,
+                            $rowData['source'],
+                            $validatedData,
+                            $formSubmission->_id,
+                            $rowData['csv_row'] ?? $rowIndex + 1,
+                            $rowData['operation']
+                        )->onQueue(env('BEANSTALKD_DUPLICATE_CHECK_QUEUE', 'duplicate_check_jobs'));
+                        
+                        $errorCount++;
+                        continue; // Skip to next row
+                    }
+                }
+                
+                // Step 3: Create FormSubmission record after validation and duplicate check pass
                 $formSubmission = FormSubmission::create([
                     'operation' => $rowData['operation'],
                     'student_id' => $rowData['student_id'] ?? null,
-                    'data' => $rowData['data'],
+                    'data' => $validatedData, // Store validated data
                     'source' => $rowData['source'],
                     'ip_address' => $this->submissionData['ip_address'] ?? null,
                     'user_agent' => $this->submissionData['user_agent'] ?? null,
-                    'status' => 'processing'
+                    'status' => 'processing',
+                    'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1
                 ]);
-
-                // Validate the data
-                // Pass current submission ID to exclude it from duplicate check
-                $validatedData = $this->validateSubmissionData($rowData['data'], $formSubmission->_id);
 
                 // Process the form submission
                 $result = $this->processFormSubmission($formSubmission, $validatedData);
 
-                // Update as completed
-                $formSubmission->update([
-                    'status' => 'completed',
-                    'data' => $validatedData,
-                    'processed_at' => now(),
-                    'error_message' => null
-                ]);
+                // Update as completed only if not marked as duplicate
+                if ($formSubmission->status !== 'failed') {
+                    $formSubmission->update([
+                        'status' => 'completed',
+                        'data' => $validatedData,
+                        'processed_at' => now(),
+                        'error_message' => null
+                    ]);
+
+                    // Mirror completed CSV row to Beanstalk for external consumers
+                    $this->mirrorToBeanstalk('csv_row_processed', [
+                        'submission_id' => $formSubmission->_id,
+                        'operation' => $formSubmission->operation,
+                        'source' => $formSubmission->source,
+                        'data' => $validatedData,
+                        'status' => 'completed',
+                        'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
+                        'csv_file' => $this->submissionData['csv_file'] ?? 'unknown',
+                        'processed_at' => $formSubmission->processed_at
+                    ], $formSubmission->_id);
+                }
                 
                 // Fire FormSubmissionProcessed event for batch row
                 Log::debug('🎯 FIRING EVENT: FormSubmissionProcessed (batch completed)', [
@@ -492,65 +697,64 @@ class ProcessFormSubmissionData implements ShouldQueue
                 Log::info('Batch row processed successfully', [
                     'submission_id' => $formSubmission->_id,
                     'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
-                    'email' => $validatedData['email'] ?? 'N/A'
+                    'email' => $formSubmission->data['email'] ?? 'N/A'
                 ]);
 
             } catch (\Illuminate\Validation\ValidationException $e) {
                 $errorCount++;
+                $email = $rowData['data']['email'] ?? 'unknown';
                 
-                // Check if this is a duplicate email validation error in batch processing
-                if (isset($e->errors()['email']) && isset($formSubmission)) {
+                // Check if this is a duplicate email validation error
+                if (isset($e->errors()['email'])) {
                     $emailErrors = $e->errors()['email'];
                     foreach ($emailErrors as $emailError) {
                         if (str_contains(strtolower($emailError), 'already registered') || 
                             str_contains(strtolower($emailError), 'duplicate')) {
                             
-                            // Fire duplicate email detected event for CSV row
-                            Log::warning('🔄 FIRING EVENT: DuplicateEmailDetected (from CSV batch processing)', [
-                                'job' => 'ProcessFormSubmissionData',
-                                'submission_id' => $formSubmission->_id ?? 'unknown',
+                            Log::info('CSV row duplicate email detected - queuing async duplicate processing', [
+                                'email' => $email,
                                 'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
-                                'email' => $rowData['data']['email'] ?? 'unknown',
-                                'source' => $rowData['source'] ?? 'csv',
-                                'validation_error' => $emailError
+                                'validation_level' => 'consumer_validation'
                             ]);
-                            event(new DuplicateEmailDetected(
-                                $rowData['data']['email'] ?? 'unknown',
+                            
+                            // Queue asynchronous duplicate email processing (check + notification)
+                            ProcessDuplicateEmailCheck::dispatch(
+                                $email,
                                 $rowData['source'] ?? 'csv',
-                                $formSubmission->_id ?? null,
                                 $rowData['data'] ?? [],
-                                $rowData['csv_row'] ?? $rowIndex + 1
-                            ));
-                            Log::debug('✅ DuplicateEmailDetected event fired from CSV batch processing');
-                            break;
+                                null, // No existing submission ID yet
+                                $rowData['csv_row'] ?? $rowIndex + 1,
+                                $rowData['operation'] ?? 'create'
+                            );
+                            
+                            Log::debug('✅ CSV duplicate email processing queued asynchronously', [
+                                'email' => $email,
+                                'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1
+                            ]);
+                            
+                            continue; // Skip to next row - no FormSubmission created for duplicates
                         }
-                    }
-                    
-                    // Update submission status to failed
-                    if (isset($formSubmission)) {
-                        $formSubmission->update([
-                            'status' => 'failed',
-                            'error_message' => 'Validation failed: ' . implode('; ', array_map(
-                                fn($errors) => is_array($errors) ? implode(', ', $errors) : $errors, 
-                                $e->errors()
-                            ))
-                        ]);
                     }
                 }
                 
-                Log::error('Batch row validation failed', [
+                // For other validation errors, log and continue
+                Log::error('CSV row validation failed', [
                     'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
                     'validation_errors' => $e->errors(),
                     'data' => $rowData['data'] ?? []
                 ]);
+                continue; // Skip to next row - no FormSubmission created for invalid data
                 
-            } catch (\Throwable $e) {
+            } catch (\Exception $e) {
                 $errorCount++;
-                Log::error('Batch row processing failed', [
+                
+                // General exception handling
+                Log::error('CSV row processing failed', [
                     'csv_row' => $rowData['csv_row'] ?? $rowIndex + 1,
                     'error' => $e->getMessage(),
                     'data' => $rowData['data'] ?? []
                 ]);
+                continue; // Skip to next row
             }
         }
 
@@ -560,5 +764,67 @@ class ProcessFormSubmissionData implements ShouldQueue
             'error_count' => $errorCount,
             'csv_file' => $this->submissionData['csv_file'] ?? 'unknown'
         ]);
+    }
+
+    /**
+     * Mirror operation to Beanstalk for external consumers
+     */
+    private function mirrorToBeanstalk(string $action, array $data, ?string $submissionId = null)
+    {
+        try {
+            $pheanstalkHost = env('BEANSTALKD_QUEUE_HOST', '127.0.0.1');
+            $pheanstalkPort = env('BEANSTALKD_PORT', 11300);
+            $pheanstalk = Pheanstalk::create($pheanstalkHost, $pheanstalkPort);
+            
+            $mirrorTube = env('BEANSTALKD_FORM_SUBMISSION_TUBE', 'form_submission_json');
+            
+            $payload = json_encode([
+                'action' => $action,
+                'submission_id' => $submissionId,
+                'data' => $data,
+                'queued_at' => now()->toDateTimeString(),
+                'source' => 'form_submission_job',
+                'mirror_id' => uniqid('mirror_job_', true), // Unique identifier for tracking
+            ], JSON_UNESCAPED_UNICODE);
+            
+            $job = $pheanstalk->useTube($mirrorTube)->put($payload);
+            
+            Log::info('✅ Form submission successfully mirrored to Beanstalk from job', [
+                'action' => $action,
+                'tube' => $mirrorTube,
+                'submission_id' => $submissionId,
+                'job_id' => $job->getId(),
+                'payload_size' => strlen($payload) . ' bytes',
+                'beanstalk_host' => $pheanstalkHost . ':' . $pheanstalkPort,
+                'source' => 'ProcessFormSubmissionData'
+            ]);
+            
+            return $job->getId(); // Return job ID for tracking
+            
+        } catch (\Pheanstalk\Exception\ConnectionException $e) {
+            Log::error("❌ Beanstalkd connection failed for mirror from job ({$action})", [
+                'error' => $e->getMessage(),
+                'host' => $pheanstalkHost ?? 'unknown',
+                'port' => $pheanstalkPort ?? 'unknown',
+                'submission_id' => $submissionId,
+                'source' => 'ProcessFormSubmissionData'
+            ]);
+        } catch (\Pheanstalk\Exception\ServerException $e) {
+            Log::error("❌ Beanstalkd server error for mirror from job ({$action})", [
+                'error' => $e->getMessage(),
+                'tube' => $mirrorTube ?? 'unknown',
+                'submission_id' => $submissionId,
+                'source' => 'ProcessFormSubmissionData'
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning("❌ Failed to write form submission mirror to beanstalk from job ({$action})", [
+                'error' => $e->getMessage(),
+                'submission_id' => $submissionId,
+                'error_type' => get_class($e),
+                'source' => 'ProcessFormSubmissionData'
+            ]);
+        }
+        
+        return null;
     }
 }
