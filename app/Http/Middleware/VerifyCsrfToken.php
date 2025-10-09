@@ -13,5 +13,6 @@ class VerifyCsrfToken extends Middleware
      */
     protected $except = [
         'form-submissions/api/clear-duplicates',
+        'form-submissions/csv/process',
     ];
 }

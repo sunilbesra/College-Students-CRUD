@@ -456,76 +456,59 @@ class FormSubmissionController extends Controller
         // Clean up the uploaded file
         unlink($fullPath);
 
-        // Immediate duplicate validation for instant frontend feedback (like form submissions)
-        $duplicatesDetected = [];
+        // IMMEDIATE duplicate validation for frontend display (before Beanstalk processing)
         $batchData = [];
+        $immediateResults = [
+            'duplicates' => [],
+            'valid' => [],
+            'total_processed' => 0
+        ];
         
         foreach ($csvData as $rowIndex => $rowData) {
-            $rowNumber = $rowIndex + 1;
+            $immediateResults['total_processed']++;
             
-            // Check for duplicate email immediately (synchronous)
+            // Check for duplicate email immediately for frontend display
             if (isset($rowData['email']) && !empty($rowData['email'])) {
-                $email = trim(strtolower($rowData['email']));
+                $validator = new \App\Services\FormSubmissionValidator();
                 
-                // Check if email already exists in database
-                $existingSubmission = FormSubmission::where('data.email', $email)->first();
-                
-                if ($existingSubmission) {
-                    // Duplicate detected! Create immediate notification
-                    $duplicateData = [
-                        'email' => $email,
-                        'source' => 'csv',
-                        'csv_row' => $rowNumber,
-                        'existing_submission_id' => $existingSubmission->_id,
-                        'duplicate_count' => 1,
-                        'detected_at' => now()->toDateTimeString()
-                    ];
+                try {
+                    // Check if email already exists
+                    $existingSubmission = \App\Models\FormSubmission::where('data.email', $rowData['email'])->first();
                     
-                    // Create notification immediately (synchronous)
-                    try {
-                        $notification = \App\Models\Notification::create([
-                            'type' => 'warning',
-                            'title' => 'Duplicate Email Detected',
-                            'message' => "Duplicate email '{$email}' detected in CSV row {$rowNumber}. Already exists as submission #" . substr($existingSubmission->_id, -8),
-                            'data' => $duplicateData,
-                            'read_at' => null,
-                            'created_at' => now(),
-                            'updated_at' => now()
-                        ]);
-                        
-                        Log::info('Immediate CSV duplicate notification created', [
-                            'notification_id' => $notification->_id,
-                            'email' => $email,
-                            'csv_row' => $rowNumber,
-                            'existing_id' => substr($existingSubmission->_id, -8)
-                        ]);
-                        
-                        $duplicatesDetected[] = [
-                            'email' => $email,
-                            'row' => $rowNumber,
-                            'existing_id' => substr($existingSubmission->_id, -8)
+                    if ($existingSubmission) {
+                        // Found duplicate - add to immediate results
+                        $immediateResults['duplicates'][] = [
+                            'email' => $rowData['email'],
+                            'row' => $rowIndex + 1,
+                            'name' => $rowData['name'] ?? 'Unknown',
+                            'existing_id' => $existingSubmission->_id,
+                            'message' => "Email '{$rowData['email']}' already exists in the database"
                         ];
                         
-                    } catch (\Exception $e) {
-                        Log::error('Failed to create immediate duplicate notification', [
-                            'error' => $e->getMessage(),
-                            'email' => $email,
-                            'csv_row' => $rowNumber
+                        Log::info('Immediate duplicate detected in CSV', [
+                            'email' => $rowData['email'],
+                            'csv_row' => $rowIndex + 1,
+                            'existing_submission_id' => $existingSubmission->_id
                         ]);
+                    } else {
+                        $immediateResults['valid'][] = $rowData['email'];
                     }
-                    
-                    // Skip adding to batch data (don't process duplicates)
-                    continue;
+                } catch (\Exception $e) {
+                    Log::error('Error checking for immediate duplicates', [
+                        'email' => $rowData['email'],
+                        'error' => $e->getMessage(),
+                        'csv_row' => $rowIndex + 1
+                    ]);
                 }
             }
             
-            // Add non-duplicate rows to batch data for processing
+            // Add all rows to batch data for Beanstalk processing (consistent behavior)
             $batchData[] = [
                 'operation' => $operation,
                 'student_id' => $rowData['student_id'] ?? null,
                 'data' => $rowData,
                 'source' => 'csv',
-                'csv_row' => $rowNumber
+                'csv_row' => $rowIndex + 1
             ];
         }
 
@@ -567,31 +550,31 @@ class FormSubmissionController extends Controller
             $message = "No data found in CSV file.";
             $alertType = 'error';
         } else {
-            $totalProcessed = count($batchData);
-            $duplicatesFound = count($duplicatesDetected);
+            $duplicateCount = count($immediateResults['duplicates']);
+            $validCount = count($immediateResults['valid']);
             
-            if ($duplicatesFound > 0) {
-                $message = "CSV processed! {$totalProcessed} rows queued for processing. {$duplicatesFound} duplicate email(s) detected immediately and skipped.";
+            if ($duplicateCount > 0) {
+                $message = "CSV uploaded! Found {$duplicateCount} duplicate email(s) and {$validCount} valid email(s). Total: " . count($batchData) . " rows processed.";
                 $alertType = 'warning';
-                
-                // Flash duplicate information for immediate display
-                session()->flash('immediate_duplicates', $duplicatesDetected);
             } else {
-                $message = "CSV uploaded successfully! " . $totalProcessed . " rows stored in Beanstalk for processing. No duplicates detected.";
+                $message = "CSV uploaded successfully! All {$validCount} email(s) are unique. Total: " . count($batchData) . " rows processed.";
                 $alertType = 'success';
             }
             
-            // Add processing info for frontend display
+            // Add immediate results and processing info for frontend display
             session()->flash('processing_info', [
                 'type' => 'csv_upload',
                 'csv_file' => $file->getClientOriginalName(),
-                'total_rows' => $totalProcessed,
-                'duplicates_found' => $duplicatesFound,
+                'total_rows' => count($batchData),
                 'mirror_job_id' => $mirrorJobId,
-                'message' => $duplicatesFound > 0 ? 
-                    "Duplicate emails detected immediately and shown below. Remaining rows are being processed." :
-                    "All rows are being processed. Any additional validation results will appear below."
+                'immediate_results' => $immediateResults,
+                'message' => 'CSV processed with immediate duplicate checking. Data also sent to Beanstalk for consistent processing.'
             ]);
+            
+            // Flash immediate duplicate results for frontend display
+            if ($duplicateCount > 0) {
+                session()->flash('immediate_duplicates', $immediateResults['duplicates']);
+            }
         }
 
         // Calculate processing time

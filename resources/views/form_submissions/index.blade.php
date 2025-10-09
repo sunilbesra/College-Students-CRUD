@@ -108,6 +108,57 @@
                         </div>
                     @endif
 
+                    <!-- Immediate Duplicates Alert (Shows without queue worker) -->
+                    @if(session('immediate_duplicates'))
+                        @php $immediateDuplicates = session('immediate_duplicates'); @endphp
+                        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                ⚡ Immediate Duplicate Detection: {{ count($immediateDuplicates) }} Duplicate Email(s) Found
+                            </h6>
+                            <p class="mb-2">
+                                <strong>✨ Real-time Results:</strong> The following email addresses already exist in the database:
+                            </p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ul class="mb-2">
+                                        @foreach(array_slice($immediateDuplicates, 0, ceil(count($immediateDuplicates)/2)) as $duplicate)
+                                            <li>
+                                                <strong>{{ $duplicate['name'] ?? 'Unknown' }}</strong><br>
+                                                <code>{{ $duplicate['email'] }}</code> 
+                                                <small class="text-muted">(CSV Row {{ $duplicate['row'] }})</small><br>
+                                                <small class="text-info">🔗 Existing ID: {{ $duplicate['existing_id'] }}</small>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                                @if(count($immediateDuplicates) > 1)
+                                    <div class="col-md-6">
+                                        <ul class="mb-2">
+                                            @foreach(array_slice($immediateDuplicates, ceil(count($immediateDuplicates)/2)) as $duplicate)
+                                                <li>
+                                                    <strong>{{ $duplicate['name'] ?? 'Unknown' }}</strong><br>
+                                                    <code>{{ $duplicate['email'] }}</code> 
+                                                    <small class="text-muted">(CSV Row {{ $duplicate['row'] }})</small><br>
+                                                    <small class="text-info">🔗 Existing ID: {{ $duplicate['existing_id'] }}</small>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                            </div>
+                            <div class="alert alert-info mb-2" style="background-color: #e7f3ff; border: 1px solid #bee5eb;">
+                                <small>
+                                    <strong><i class="fas fa-lightning-bolt"></i> Instant Detection:</strong> 
+                                    These duplicates were detected immediately without requiring queue workers!<br>
+                                    <strong><i class="fas fa-cogs"></i> Architecture:</strong> 
+                                    Data is still sent to Beanstalk for consistent processing and additional validation.
+                                </small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    @endif
+
                     <!-- Processing Info Alert (for new architecture) -->
                     @if(session('processing_info'))
                         @php $processingInfo = session('processing_info'); @endphp
@@ -168,37 +219,7 @@
                         </div>
                     </div>
 
-                    <!-- Immediate CSV Duplicates Section -->
-                    @if(session('immediate_duplicates'))
-                        <div class="alert alert-warning" role="alert">
-                            <h6 class="alert-heading">
-                                <i class="fas fa-exclamation-triangle"></i> 
-                                Immediate CSV Duplicate Detection ({{ count(session('immediate_duplicates')) }})
-                            </h6>
-                            <p class="mb-3">The following duplicate emails were detected immediately during CSV upload and skipped:</p>
-                            <div class="row">
-                                @foreach(session('immediate_duplicates') as $duplicate)
-                                    <div class="col-md-6 mb-2">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <code>{{ $duplicate['email'] }}</code>
-                                                <small class="text-muted d-block">
-                                                    <i class="fas fa-file-csv"></i> CSV Row {{ $duplicate['row'] }}
-                                                    | Existing ID: {{ $duplicate['existing_id'] }}
-                                                </small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                            <hr class="my-2">
-                            <small class="text-muted">
-                                <strong><i class="fas fa-zap"></i> Instant Detection:</strong> 
-                                These duplicates were found immediately during upload using the new synchronous validation. 
-                                <span class="text-success"><i class="fas fa-check-circle"></i> No duplicate data was processed.</span>
-                            </small>
-                        </div>
-                    @endif
+
 
                     <!-- Duplicate Emails Details -->
                     @if(session('duplicate_emails'))
