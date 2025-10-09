@@ -168,6 +168,38 @@
                         </div>
                     </div>
 
+                    <!-- Immediate CSV Duplicates Section -->
+                    @if(session('immediate_duplicates'))
+                        <div class="alert alert-warning" role="alert">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                Immediate CSV Duplicate Detection ({{ count(session('immediate_duplicates')) }})
+                            </h6>
+                            <p class="mb-3">The following duplicate emails were detected immediately during CSV upload and skipped:</p>
+                            <div class="row">
+                                @foreach(session('immediate_duplicates') as $duplicate)
+                                    <div class="col-md-6 mb-2">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <code>{{ $duplicate['email'] }}</code>
+                                                <small class="text-muted d-block">
+                                                    <i class="fas fa-file-csv"></i> CSV Row {{ $duplicate['row'] }}
+                                                    | Existing ID: {{ $duplicate['existing_id'] }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                            <hr class="my-2">
+                            <small class="text-muted">
+                                <strong><i class="fas fa-zap"></i> Instant Detection:</strong> 
+                                These duplicates were found immediately during upload using the new synchronous validation. 
+                                <span class="text-success"><i class="fas fa-check-circle"></i> No duplicate data was processed.</span>
+                            </small>
+                        </div>
+                    @endif
+
                     <!-- Duplicate Emails Details -->
                     @if(session('duplicate_emails'))
                         <div class="alert alert-warning" role="alert">

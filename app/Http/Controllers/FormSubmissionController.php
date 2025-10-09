@@ -456,17 +456,76 @@ class FormSubmissionController extends Controller
         // Clean up the uploaded file
         unlink($fullPath);
 
-        // No duplicate validation in controller - prepare all CSV data for Beanstalk processing
+        // Immediate duplicate validation for instant frontend feedback (like form submissions)
+        $duplicatesDetected = [];
         $batchData = [];
         
         foreach ($csvData as $rowIndex => $rowData) {
-            // Add all rows to batch data - let Beanstalk consumer handle duplicate validation
+            $rowNumber = $rowIndex + 1;
+            
+            // Check for duplicate email immediately (synchronous)
+            if (isset($rowData['email']) && !empty($rowData['email'])) {
+                $email = trim(strtolower($rowData['email']));
+                
+                // Check if email already exists in database
+                $existingSubmission = FormSubmission::where('data.email', $email)->first();
+                
+                if ($existingSubmission) {
+                    // Duplicate detected! Create immediate notification
+                    $duplicateData = [
+                        'email' => $email,
+                        'source' => 'csv',
+                        'csv_row' => $rowNumber,
+                        'existing_submission_id' => $existingSubmission->_id,
+                        'duplicate_count' => 1,
+                        'detected_at' => now()->toDateTimeString()
+                    ];
+                    
+                    // Create notification immediately (synchronous)
+                    try {
+                        $notification = \App\Models\Notification::create([
+                            'type' => 'warning',
+                            'title' => 'Duplicate Email Detected',
+                            'message' => "Duplicate email '{$email}' detected in CSV row {$rowNumber}. Already exists as submission #" . substr($existingSubmission->_id, -8),
+                            'data' => $duplicateData,
+                            'read_at' => null,
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ]);
+                        
+                        Log::info('Immediate CSV duplicate notification created', [
+                            'notification_id' => $notification->_id,
+                            'email' => $email,
+                            'csv_row' => $rowNumber,
+                            'existing_id' => substr($existingSubmission->_id, -8)
+                        ]);
+                        
+                        $duplicatesDetected[] = [
+                            'email' => $email,
+                            'row' => $rowNumber,
+                            'existing_id' => substr($existingSubmission->_id, -8)
+                        ];
+                        
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create immediate duplicate notification', [
+                            'error' => $e->getMessage(),
+                            'email' => $email,
+                            'csv_row' => $rowNumber
+                        ]);
+                    }
+                    
+                    // Skip adding to batch data (don't process duplicates)
+                    continue;
+                }
+            }
+            
+            // Add non-duplicate rows to batch data for processing
             $batchData[] = [
                 'operation' => $operation,
                 'student_id' => $rowData['student_id'] ?? null,
                 'data' => $rowData,
                 'source' => 'csv',
-                'csv_row' => $rowIndex + 1
+                'csv_row' => $rowNumber
             ];
         }
 
@@ -503,21 +562,35 @@ class FormSubmissionController extends Controller
             'job' => 'ProcessFormSubmissionData'
         ]);
 
-        // Simple success message - validation will happen in Beanstalk consumer
+        // Success message with immediate duplicate detection results
         if (count($csvData) === 0) {
             $message = "No data found in CSV file.";
             $alertType = 'error';
         } else {
-            $message = "CSV uploaded successfully! " . count($batchData) . " rows stored in Beanstalk for validation and processing.";
-            $alertType = 'success';
+            $totalProcessed = count($batchData);
+            $duplicatesFound = count($duplicatesDetected);
+            
+            if ($duplicatesFound > 0) {
+                $message = "CSV processed! {$totalProcessed} rows queued for processing. {$duplicatesFound} duplicate email(s) detected immediately and skipped.";
+                $alertType = 'warning';
+                
+                // Flash duplicate information for immediate display
+                session()->flash('immediate_duplicates', $duplicatesDetected);
+            } else {
+                $message = "CSV uploaded successfully! " . $totalProcessed . " rows stored in Beanstalk for processing. No duplicates detected.";
+                $alertType = 'success';
+            }
             
             // Add processing info for frontend display
             session()->flash('processing_info', [
                 'type' => 'csv_upload',
                 'csv_file' => $file->getClientOriginalName(),
-                'total_rows' => count($batchData),
+                'total_rows' => $totalProcessed,
+                'duplicates_found' => $duplicatesFound,
                 'mirror_job_id' => $mirrorJobId,
-                'message' => 'Your CSV is being processed. Any duplicate emails will be shown in notifications below after validation completes.'
+                'message' => $duplicatesFound > 0 ? 
+                    "Duplicate emails detected immediately and shown below. Remaining rows are being processed." :
+                    "All rows are being processed. Any additional validation results will appear below."
             ]);
         }
 
