@@ -190,6 +190,15 @@
                         </div>
                     @endif
 
+                    <!-- CSV Upload Note -->
+                    @if(session('processing_info') && session('processing_info.type') === 'csv_upload')
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Note:</strong> Duplicate emails for your CSV upload will appear below as soon as they are detected by the background validation system.
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    @endif
+
                     <!-- Real-time Duplicate Notifications Section -->
                     <div id="duplicate-notifications-section" style="display: none;">
                         <div class="alert alert-warning d-flex justify-content-between align-items-start" role="alert">

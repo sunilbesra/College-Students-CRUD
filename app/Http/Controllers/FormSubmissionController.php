@@ -161,7 +161,7 @@ class FormSubmissionController extends Controller
 
         Log::info('Form submission stored in Beanstalk and sent for processing', [
             'operation' => $request->operation,
-            'source' => $request->source,
+            'source' => $request->source,   
             'email' => $formData['email'] ?? 'N/A',
             'mirror_job_id' => $mirrorJobId,
             'job' => 'ProcessFormSubmissionData'
@@ -469,76 +469,9 @@ class FormSubmissionController extends Controller
         // Clean up the uploaded file
         unlink($fullPath);
 
-        // IMMEDIATE duplicate validation for frontend display (before Beanstalk processing)
+        // Prepare batch data for Beanstalk processing (no validation in controller)
         $batchData = [];
-        $immediateResults = [
-            'duplicates' => [],
-            'valid' => [],
-            'total_processed' => 0
-        ];
-        
         foreach ($csvData as $rowIndex => $rowData) {
-            $immediateResults['total_processed']++;
-            
-            // Check for duplicate email immediately for frontend display
-            if (isset($rowData['email']) && !empty($rowData['email'])) {
-                $validator = new \App\Services\FormSubmissionValidator();
-                
-                try {
-                    // Check if email already exists
-                    $existingSubmission = \App\Models\FormSubmission::where('data.email', $rowData['email'])->first();
-                    
-                    if ($existingSubmission) {
-                        // Found duplicate - add to immediate results
-                        $immediateResults['duplicates'][] = [
-                            'email' => $rowData['email'],
-                            'row' => $rowIndex + 1,
-                            'name' => $rowData['name'] ?? 'Unknown',
-                            'existing_id' => $existingSubmission->_id,
-                            'message' => "Email '{$rowData['email']}' already exists in the database"
-                        ];
-                        
-                        Log::info('Immediate duplicate detected in CSV', [
-                            'email' => $rowData['email'],
-                            'csv_row' => $rowIndex + 1,
-                            'existing_submission_id' => $existingSubmission->_id
-                        ]);
-                        
-                        // Fire DuplicateEmailDetected event for immediate notifications
-                        Log::info('🎯 FIRING EVENT: DuplicateEmailDetected (immediate CSV)', [
-                            'email' => $rowData['email'],
-                            'csv_row' => $rowIndex + 1,
-                            'source' => 'csv',
-                            'existing_submission_id' => $existingSubmission->_id,
-                            'duplicate_detection' => 'immediate'
-                        ]);
-                        
-                        event(new \App\Events\DuplicateEmailDetected(
-                            $rowData['email'],
-                            'csv',
-                            $existingSubmission->_id,
-                            [
-                                'csv_row' => $rowIndex + 1,
-                                'name' => $rowData['name'] ?? 'Unknown',
-                                'csv_file' => $file->getClientOriginalName(),
-                                'detection_method' => 'immediate_controller',
-                                'duplicate_count' => 1
-                            ]
-                        ));
-                        Log::debug('✅ DuplicateEmailDetected (immediate CSV) event fired successfully');
-                    } else {
-                        $immediateResults['valid'][] = $rowData['email'];
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Error checking for immediate duplicates', [
-                        'email' => $rowData['email'],
-                        'error' => $e->getMessage(),
-                        'csv_row' => $rowIndex + 1
-                    ]);
-                }
-            }
-            
-            // Add all rows to batch data for Beanstalk processing (consistent behavior)
             $batchData[] = [
                 'operation' => $operation,
                 'student_id' => $rowData['student_id'] ?? null,
@@ -581,36 +514,22 @@ class FormSubmissionController extends Controller
             'job' => 'ProcessFormSubmissionData'
         ]);
 
-        // Success message with immediate duplicate detection results
+        // Success message for Beanstalk-first architecture (no duplicate checking in controller)
         if (count($csvData) === 0) {
             $message = "No data found in CSV file.";
             $alertType = 'error';
         } else {
-            $duplicateCount = count($immediateResults['duplicates']);
-            $validCount = count($immediateResults['valid']);
+            $message = "CSV uploaded successfully! " . count($batchData) . " rows sent to Beanstalk for processing. Duplicate validation will occur in the background.";
+            $alertType = 'success';
             
-            if ($duplicateCount > 0) {
-                $message = "CSV uploaded! Found {$duplicateCount} duplicate email(s) and {$validCount} valid email(s). Total: " . count($batchData) . " rows processed.";
-                $alertType = 'warning';
-            } else {
-                $message = "CSV uploaded successfully! All {$validCount} email(s) are unique. Total: " . count($batchData) . " rows processed.";
-                $alertType = 'success';
-            }
-            
-            // Add immediate results and processing info for frontend display
+            // Add processing info for frontend display
             session()->flash('processing_info', [
                 'type' => 'csv_upload',
                 'csv_file' => $file->getClientOriginalName(),
                 'total_rows' => count($batchData),
                 'mirror_job_id' => $mirrorJobId,
-                'immediate_results' => $immediateResults,
-                'message' => 'CSV processed with immediate duplicate checking. Data also sent to Beanstalk for consistent processing.'
+                'message' => 'CSV data sent to Beanstalk for validation and processing. Duplicate validation happens in background consumer.'
             ]);
-            
-            // Flash immediate duplicate results for frontend display
-            if ($duplicateCount > 0) {
-                session()->flash('immediate_duplicates', $immediateResults['duplicates']);
-            }
         }
 
         // Calculate processing time
@@ -631,10 +550,10 @@ class FormSubmissionController extends Controller
             $operation,
             [
                 'total_rows' => count($csvData), 
-                'valid_rows' => count($immediateResults['valid']),
+                'valid_rows' => 0, // Will be calculated in consumer
                 'invalid_rows' => 0, // Will be calculated in consumer
-                'duplicate_rows' => count($immediateResults['duplicates']),
-                'immediate_duplicates' => count($immediateResults['duplicates'])
+                'duplicate_rows' => 0, // Will be calculated in consumer
+                'processed_in_consumer' => true // Indicates validation happens in consumer
             ],
             (int) $processingTime,
             count($batchData) > 0 ? 'batch_job_dispatched' : null
@@ -743,37 +662,7 @@ class FormSubmissionController extends Controller
         ]);
     }
 
-    /**
-     * Check if email is duplicate (AJAX endpoint)
-     */
-    public function checkDuplicateEmail(Request $request)
-    {
-        $request->validate([
-            'email' => 'required|email'
-        ]);
 
-        $email = trim(strtolower($request->email));
-        
-        // Check for existing form submissions with same email
-        $existingSubmission = FormSubmission::where('data.email', $email)
-            ->where('status', 'completed')
-            ->where('operation', 'create')
-            ->first();
-
-        if ($existingSubmission) {
-            return response()->json([
-                'is_duplicate' => true,
-                'existing_id' => substr($existingSubmission->_id, -8),
-                'existing_submission_id' => $existingSubmission->_id,
-                'message' => 'This email address is already registered in the system.'
-            ]);
-        }
-
-        return response()->json([
-            'is_duplicate' => false,
-            'message' => 'Email is available.'
-        ]);
-    }
 
     /**
      * Get recent duplicate notifications (AJAX endpoint for frontend)

@@ -354,56 +354,7 @@ function clearImagePreview() {
     preview.style.display = 'none';
 }
 
-// Real-time duplicate email checking
-let emailCheckTimeout;
-function checkEmailDuplicate(email) {
-    clearTimeout(emailCheckTimeout);
-    emailCheckTimeout = setTimeout(() => {
-        if (email && email.length > 5 && email.includes('@')) {
-            fetch('/form_submissions/check-duplicate-email', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({ email: email })
-            })
-            .then(response => response.json())
-            .then(data => {
-                const emailField = document.getElementById('data_email');
-                const duplicateWarning = document.getElementById('duplicate-warning');
-                
-                if (data.is_duplicate) {
-                    emailField.classList.add('is-invalid');
-                    if (!duplicateWarning) {
-                        const warningDiv = document.createElement('div');
-                        warningDiv.id = 'duplicate-warning';
-                        warningDiv.className = 'invalid-feedback';
-                        warningDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> This email is already registered (ID: ${data.existing_id})`;
-                        emailField.parentNode.appendChild(warningDiv);
-                    } else {
-                        duplicateWarning.innerHTML = `<i class="fas fa-exclamation-triangle"></i> This email is already registered (ID: ${data.existing_id})`;
-                    }
-                } else {
-                    emailField.classList.remove('is-invalid');
-                    if (duplicateWarning) {
-                        duplicateWarning.remove();
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error checking duplicate email:', error);
-            });
-        }
-    }, 500); // Debounce for 500ms
-}
-
-// Add event listener for email field
-document.addEventListener('DOMContentLoaded', function() {
-    const emailField = document.getElementById('data_email');
-    emailField.addEventListener('input', function() {
-        checkEmailDuplicate(this.value.trim().toLowerCase());
-    });
-});
+// Note: Duplicate validation now happens in Beanstalk consumer (pure Beanstalk-first architecture)
+// No real-time validation in frontend - duplicates will be detected after submission
 </script>
 @endsection
