@@ -253,6 +253,10 @@ Route::get('form-submissions/api/latest', [FormSubmissionController::class, 'get
 Route::post('form-submissions/check-duplicate-email', [FormSubmissionController::class, 'checkDuplicateEmail'])->name('form_submissions.check_duplicate_email');
 Route::get('form-submissions/api/recent-duplicates', [FormSubmissionController::class, 'getRecentDuplicateNotifications'])->name('form_submissions.recent_duplicates');
 Route::delete('form-submissions/api/clear-duplicates', [FormSubmissionController::class, 'clearDuplicateNotifications'])->name('form_submissions.clear_duplicates');
+Route::get('form-submissions/api/all-notifications', [FormSubmissionController::class, 'getAllRecentNotifications'])->name('form_submissions.all_notifications');
+Route::delete('form-submissions/api/clear-all-notifications', [FormSubmissionController::class, 'clearAllRecentNotifications'])->name('form_submissions.clear_all_notifications');
+Route::get('form-submissions/api/notifications', [FormSubmissionController::class, 'getAllRecentNotifications'])->name('form_submissions.all_notifications');
+Route::delete('form-submissions/api/clear-all-notifications', [FormSubmissionController::class, 'clearAllRecentNotifications'])->name('form_submissions.clear_all_notifications');
 
 Route::get('upload-csv', [CsvController::class, 'showForm']);
 Route::post('upload-csv', [CsvController::class, 'upload'])->name('csv.upload');

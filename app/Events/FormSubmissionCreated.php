@@ -21,8 +21,9 @@ class FormSubmissionCreated
 
     /**
      * Create a new event instance.
+     * FormSubmission can be null for Beanstalk-first architecture where the model doesn't exist yet
      */
-    public function __construct(FormSubmission $formSubmission, array $submissionData, string $source = 'form')
+    public function __construct(?FormSubmission $formSubmission, array $submissionData, string $source = 'form')
     {
         $this->formSubmission = $formSubmission;
         $this->submissionData = $submissionData;

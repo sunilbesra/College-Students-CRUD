@@ -27,23 +27,24 @@ class CreateFormSubmissionNotification // implements ShouldQueue
     {
         try {
             $data = [
-                'submission_id' => $event->formSubmission->_id ?? null,
-                'email' => $event->submissionData['email'] ?? 'Unknown',
-                'name' => $event->submissionData['name'] ?? 'Unknown',
+                'submission_id' => $event->formSubmission?->_id ?? null,
+                'email' => $event->submissionData['data']['email'] ?? ($event->submissionData['email'] ?? 'Unknown'),
+                'name' => $event->submissionData['data']['name'] ?? ($event->submissionData['name'] ?? 'Unknown'),
                 'source' => $event->source,
-                'operation' => $event->formSubmission->operation ?? 'create'
+                'operation' => $event->formSubmission?->operation ?? ($event->submissionData['operation'] ?? 'create')
             ];
 
             NotificationService::createFormSubmissionNotification('created', $data);
             
             Log::debug('Form submission notification created', [
                 'submission_id' => $data['submission_id'],
-                'email' => $data['email']
+                'email' => $data['email'],
+                'beanstalk_first' => $event->formSubmission === null ? 'yes' : 'no'
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to create form submission notification', [
                 'error' => $e->getMessage(),
-                'submission_id' => $event->formSubmission->_id ?? null
+                'submission_id' => $event->formSubmission?->_id ?? null
             ]);
         }
     }

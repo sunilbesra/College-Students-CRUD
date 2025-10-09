@@ -221,6 +221,36 @@
 
 
 
+                    <!-- Comprehensive Real-time Notifications Section -->
+                    <div id="all-notifications-section" style="display: none;">
+                        <div class="alert alert-info d-flex justify-content-between align-items-start" role="alert">
+                            <div class="flex-grow-1">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-bell"></i> 
+                                    Recent System Notifications (<span id="all-notifications-count">0</span>)
+                                </h6>
+                                <p class="mb-2">Latest form submissions, CSV uploads, and duplicate detections:</p>
+                                <div id="all-notifications-list" style="max-height: 400px; overflow-y: auto;">
+                                    <!-- All notifications will be populated here via JavaScript -->
+                                </div>
+                                <hr class="my-2">
+                                <small class="text-muted">
+                                    <strong>🎯 Beanstalk-First Architecture:</strong> These notifications show real-time events from both form submissions and CSV uploads processed through our unified validation system.
+                                </small>
+                            </div>
+                            <div class="ms-3">
+                                <button type="button" 
+                                        id="clear-all-notifications-btn" 
+                                        class="btn btn-outline-secondary btn-sm"
+                                        title="Clear all notifications">
+                                    <i class="fas fa-times"></i> Clear All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+
+
                     <!-- Duplicate Emails Details -->
                     @if(session('duplicate_emails'))
                         <div class="alert alert-warning" role="alert">
@@ -651,16 +681,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start duplicate notifications checking
     startDuplicateNotifications();
     
+    // Start comprehensive notifications monitoring
+    startAllNotificationsMonitoring();
+    
     // Add event listener for clear duplicates button
     const clearButton = document.getElementById('clear-duplicates-btn');
     if (clearButton) {
         clearButton.addEventListener('click', clearDuplicateNotifications);
     }
     
+    // Add event listener for clear all notifications button
+    const clearAllButton = document.getElementById('clear-all-notifications-btn');
+    if (clearAllButton) {
+        clearAllButton.addEventListener('click', clearAllNotifications);
+    }
+    
     // Cleanup on page unload
     window.addEventListener('beforeunload', function() {
         stopAutoRefresh();
         stopDuplicateNotifications();
+        stopAllNotificationsMonitoring();
     });
 });
 
@@ -890,13 +930,156 @@ async function clearDuplicateNotifications() {
     }
 }
 
+// Comprehensive Notifications System
+let allNotificationsInterval = null;
+
+function startAllNotificationsMonitoring() {
+    console.log('🔔 Starting comprehensive notifications monitoring...');
+    
+    // Check immediately
+    checkForAllNotifications();
+    
+    // Check every 5 seconds for all notifications
+    allNotificationsInterval = setInterval(checkForAllNotifications, 5000);
+}
+
+function stopAllNotificationsMonitoring() {
+    if (allNotificationsInterval) {
+        clearInterval(allNotificationsInterval);
+        allNotificationsInterval = null;
+    }
+    console.log('🔕 Comprehensive notifications monitoring stopped');
+}
+
+function checkForAllNotifications() {
+    fetch('{{ route("form_submissions.all_notifications") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.notifications && data.notifications.length > 0) {
+                console.log('🔔 Found', data.notifications.length, 'total notifications:', data.types);
+                displayAllNotifications(data.notifications, data.types);
+            } else {
+                // Hide section if no notifications
+                document.getElementById('all-notifications-section').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.log('All notifications check failed:', error);
+        });
+}
+
+function displayAllNotifications(notifications, types) {
+    const section = document.getElementById('all-notifications-section');
+    
+    // Update the count
+    document.getElementById('all-notifications-count').textContent = notifications.length;
+    
+    // Build the list HTML with different colors for different types
+    let listHtml = '';
+    notifications.forEach(notification => {
+        const typeClass = getNotificationTypeClass(notification.type);
+        const iconClass = getNotificationIcon(notification.type, notification.data);
+        
+        listHtml += `
+            <div class="mb-2 border-start border-3 ${typeClass} ps-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="${iconClass} me-2"></i>
+                            <strong>${notification.title}</strong>
+                            <span class="badge bg-secondary ms-2">${notification.type.replace('_', ' ')}</span>
+                        </div>
+                        <div class="text-muted small mb-1">${notification.message}</div>
+                        ${notification.data && notification.data.email ? `<code class="small">${notification.data.email}</code>` : ''}
+                        ${notification.data && notification.data.csv_row ? `<span class="badge bg-info ms-1">Row ${notification.data.csv_row}</span>` : ''}
+                    </div>
+                    <div class="text-end">
+                        <small class="text-muted d-block">${notification.time_ago}</small>
+                        ${notification.action_url ? `<a href="${notification.action_url}" class="btn btn-outline-primary btn-sm mt-1">${notification.action_text || 'View'}</a>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('all-notifications-list').innerHTML = listHtml;
+    section.style.display = 'block';
+}
+
+function getNotificationTypeClass(type) {
+    switch(type) {
+        case 'form_submission': return 'border-success';
+        case 'csv_upload': return 'border-primary';
+        case 'duplicate_email': return 'border-warning';
+        default: return 'border-secondary';
+    }
+}
+
+function getNotificationIcon(type, data) {
+    switch(type) {
+        case 'form_submission': return 'fas fa-wpforms text-success';
+        case 'csv_upload': return 'fas fa-file-csv text-primary';
+        case 'duplicate_email': return 'fas fa-copy text-warning';
+        default: return 'fas fa-bell text-secondary';
+    }
+}
+
+async function clearAllNotifications() {
+    try {
+        const clearButton = document.getElementById('clear-all-notifications-btn');
+        const originalText = clearButton.innerHTML;
+        
+        // Show loading state
+        clearButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
+        clearButton.disabled = true;
+        
+        const response = await fetch('{{ route("form_submissions.clear_all_notifications") }}', {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Hide the notifications section
+            document.getElementById('all-notifications-section').style.display = 'none';
+            
+            // Also hide duplicate notifications section
+            document.getElementById('duplicate-notifications-section').style.display = 'none';
+            
+            console.log('All notifications cleared:', result.deleted_count);
+        } else {
+            console.error('Failed to clear all notifications:', result.error);
+            alert('Failed to clear notifications. Please try again.');
+        }
+        
+        // Restore button state
+        clearButton.innerHTML = originalText;
+        clearButton.disabled = false;
+        
+    } catch (error) {
+        console.error('Error clearing all notifications:', error);
+        alert('An error occurred while clearing notifications. Please try again.');
+        
+        // Restore button state
+        const clearButton = document.getElementById('clear-all-notifications-btn');
+        clearButton.innerHTML = '<i class="fas fa-times"></i> Clear All';
+        clearButton.disabled = false;
+    }
+}
+
 // Alias functions to match button onclick handlers
 function pausePolling() {
     pauseAutoRefresh();
+    stopAllNotificationsMonitoring();
 }
 
 function resumePolling() {
     resumeAutoRefresh();
+    startAllNotificationsMonitoring();
 }
 
 async function checkForNewSubmissions() {

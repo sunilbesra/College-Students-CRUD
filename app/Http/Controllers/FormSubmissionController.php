@@ -146,6 +146,19 @@ class FormSubmissionController extends Controller
         ProcessFormSubmissionData::dispatch(null, $submissionData)
             ->onQueue(env('BEANSTALKD_FORM_SUBMISSION_QUEUE', 'form_submission_jobs'));
 
+        // THIRD: Fire FormSubmissionCreated event for immediate notifications
+        Log::info('🎯 FIRING EVENT: FormSubmissionCreated', [
+            'controller' => 'FormSubmissionController',
+            'email' => $formData['email'] ?? 'N/A',
+            'operation' => $request->operation,
+            'source' => $request->source,
+            'mirror_job_id' => $mirrorJobId
+        ]);
+        
+        // Fire event with null FormSubmission (Beanstalk-first architecture - model created later in consumer)
+        event(new \App\Events\FormSubmissionCreated(null, $submissionData, $request->source));
+        Log::debug('✅ FormSubmissionCreated event fired successfully');
+
         Log::info('Form submission stored in Beanstalk and sent for processing', [
             'operation' => $request->operation,
             'source' => $request->source,
@@ -160,7 +173,7 @@ class FormSubmissionController extends Controller
                 'type' => 'form_submission',
                 'email' => $formData['email'] ?? 'N/A',
                 'mirror_job_id' => $mirrorJobId,
-                'message' => 'Your submission is being validated. If there are any duplicates, you will see a notification on this page shortly.'
+                'message' => 'Your submission is being validated. Duplicate validation happens in the consumer.'
             ]);
     }
 
@@ -490,6 +503,29 @@ class FormSubmissionController extends Controller
                             'csv_row' => $rowIndex + 1,
                             'existing_submission_id' => $existingSubmission->_id
                         ]);
+                        
+                        // Fire DuplicateEmailDetected event for immediate notifications
+                        Log::info('🎯 FIRING EVENT: DuplicateEmailDetected (immediate CSV)', [
+                            'email' => $rowData['email'],
+                            'csv_row' => $rowIndex + 1,
+                            'source' => 'csv',
+                            'existing_submission_id' => $existingSubmission->_id,
+                            'duplicate_detection' => 'immediate'
+                        ]);
+                        
+                        event(new \App\Events\DuplicateEmailDetected(
+                            $rowData['email'],
+                            'csv',
+                            $existingSubmission->_id,
+                            [
+                                'csv_row' => $rowIndex + 1,
+                                'name' => $rowData['name'] ?? 'Unknown',
+                                'csv_file' => $file->getClientOriginalName(),
+                                'detection_method' => 'immediate_controller',
+                                'duplicate_count' => 1
+                            ]
+                        ));
+                        Log::debug('✅ DuplicateEmailDetected (immediate CSV) event fired successfully');
                     } else {
                         $immediateResults['valid'][] = $rowData['email'];
                     }
@@ -593,7 +629,13 @@ class FormSubmissionController extends Controller
         event(new CsvUploadCompleted(
             $file->getClientOriginalName(),
             $operation,
-            ['total_rows' => count($csvData), 'valid_rows' => 0, 'invalid_rows' => 0, 'duplicate_rows' => 0], // Real validation will happen in consumer
+            [
+                'total_rows' => count($csvData), 
+                'valid_rows' => count($immediateResults['valid']),
+                'invalid_rows' => 0, // Will be calculated in consumer
+                'duplicate_rows' => count($immediateResults['duplicates']),
+                'immediate_duplicates' => count($immediateResults['duplicates'])
+            ],
             (int) $processingTime,
             count($batchData) > 0 ? 'batch_job_dispatched' : null
         ));
@@ -857,6 +899,98 @@ class FormSubmissionController extends Controller
                 'success' => false,
                 'error' => 'Failed to clear duplicate notifications: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Get all recent notifications for both forms and CSV uploads (AJAX endpoint for frontend)
+     */
+    public function getAllRecentNotifications(Request $request)
+    {
+        try {
+            // Get recent notifications from the last 30 minutes
+            $recentNotifications = \App\Models\Notification::whereIn('type', [
+                    \App\Models\Notification::TYPE_FORM_SUBMISSION,
+                    \App\Models\Notification::TYPE_CSV_UPLOAD,
+                    \App\Models\Notification::TYPE_DUPLICATE_EMAIL
+                ])
+                ->where('created_at', '>=', now()->subMinutes(30))
+                ->orderBy('created_at', 'desc')
+                ->limit(50)
+                ->get();
+
+            $notifications = [];
+            
+            foreach ($recentNotifications as $notification) {
+                $data = $notification->data ?? [];
+                
+                $notifications[] = [
+                    'id' => $notification->_id,
+                    'type' => $notification->type,
+                    'title' => $notification->title,
+                    'message' => $notification->message,
+                    'icon' => $notification->icon ?? 'fas fa-info-circle',
+                    'color' => $notification->color ?? 'blue',
+                    'action_url' => $notification->action_url,
+                    'action_text' => $notification->action_text,
+                    'created_at' => $notification->created_at->toDateTimeString(),
+                    'time_ago' => $notification->created_at->diffForHumans(),
+                    'is_read' => $notification->read_at !== null,
+                    'data' => $data
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'notifications' => $notifications,
+                'count' => count($notifications),
+                'types' => [
+                    'form_submission' => $notifications ? count(array_filter($notifications, fn($n) => $n['type'] === \App\Models\Notification::TYPE_FORM_SUBMISSION)) : 0,
+                    'csv_upload' => $notifications ? count(array_filter($notifications, fn($n) => $n['type'] === \App\Models\Notification::TYPE_CSV_UPLOAD)) : 0,
+                    'duplicate_email' => $notifications ? count(array_filter($notifications, fn($n) => $n['type'] === \App\Models\Notification::TYPE_DUPLICATE_EMAIL)) : 0,
+                ],
+                'last_check' => now()->toDateTimeString()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to fetch notifications: ' . $e->getMessage(),
+                'notifications' => [],
+                'count' => 0
+            ]);
+        }
+    }
+
+    /**
+     * Clear all recent notifications (AJAX endpoint for frontend)
+     */
+    public function clearAllRecentNotifications(Request $request)
+    {
+        try {
+            // Clear all recent notifications from the last hour
+            $deletedCount = \App\Models\Notification::whereIn('type', [
+                    \App\Models\Notification::TYPE_FORM_SUBMISSION,
+                    \App\Models\Notification::TYPE_CSV_UPLOAD,
+                    \App\Models\Notification::TYPE_DUPLICATE_EMAIL
+                ])
+                ->where('created_at', '>=', now()->subHour())
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Cleared {$deletedCount} notification(s)",
+                'deleted_count' => $deletedCount,
+                'timestamp' => now()->toISOString()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to clear notifications: ' . $e->getMessage(),
+                'deleted_count' => 0,
+                'timestamp' => now()->toISOString()
+            ]);
         }
     }
 }
